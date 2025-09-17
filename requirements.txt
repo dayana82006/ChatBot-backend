@@ -1,0 +1,14 @@
+# backend/requirements.txt
+fastapi==0.111.0
+uvicorn==0.29.0
+pydantic==2.7.1
+pydantic-settings==2.2.1
+python-dotenv==1.0.1
+# Para Qdrant y Langroid, se añadirán después de configurar la base.
+# qdrant-client
+# langroid
+# faiss-cpu # o faiss-gpu si se usa
+# openai # si se usa OpenAI Embeddings o LLM
+# python-multipart # para subir archivos si se implementa, pero fuera de MVP
+# httpx # para clientes HTTP, si es necesario para interactuar con APIs externas
+# requests # Alternativa a httpx
