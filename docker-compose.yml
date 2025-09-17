@@ -1,18 +1,15 @@
-# docker-compose.yml (en la raíz de assist-mvp/)
-version: '3.8'
-
 services:
   qdrant:
     image: qdrant/qdrant:latest
     container_name: qdrant_vector_db
     ports:
-      - "6333:6333" # Puerto para la API gRPC y REST
-      - "6334:6334" # Puerto para la UI (opcional, pero útil)
+      - "6333:6333"
+      - "6334:6334"
     volumes:
       - qdrant_data:/qdrant/storage
     environment:
-      QDRANT__SERVICE__GRPC_PORT: 6334
-      QDRANT__SERVICE__HTTP_PORT: 6333
+      QDRANT_SERVICE_GRPC_PORT: 6334
+      QDRANT_SERVICE_HTTP_PORT: 6333
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:6333/healthz"]
       interval: 10s
@@ -20,26 +17,15 @@ services:
       retries: 5
 
   backend:
-    build:
-      context: ./backend
-      dockerfile: Dockerfile
-    container_name: assist_mvp_backend
+    build: .
+    container_name: chatbot_backend
     ports:
       - "8000:8000"
     volumes:
-      - ./backend:/app # Monta el código de tu backend
-      - ./.env:/app/.env # Monta el archivo .env
-    environment:
-      # Pasa variables de entorno explícitamente si Dockerfile no las maneja bien o para sobreescribir
-      QDRANT_URL: http://qdrant:6333 # Asegúrate de que el backend pueda ver a Qdrant por el nombre del servicio
-      FRONTEND_ORIGIN: http://localhost:5173 # O la URL de tu frontend si no corre en localhost
-      # ... otras variables del .env que necesites en el contenedor
+      - .:/app
     depends_on:
-      qdrant:
-        condition: service_healthy # Asegura que Qdrant esté listo antes de iniciar el backend
-    # command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload # Usar para desarrollo
-    command: /bin/sh -c "python -m uvicorn app.main:app --host 0.0.0.0 --port 8000" # Comando para producción/ejecución normal
-
+      - qdrant
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 
 volumes:
   qdrant_data:
