@@ -5,6 +5,9 @@ from contextlib import asynccontextmanager
 from app.routers import chat, whatsapp, admin
 from app.config import settings
 
+from app.database.database import init_db
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     print("FastAPI application starting up...")
@@ -31,6 +34,12 @@ app.add_middleware(
 app.include_router(chat.router, prefix="/chat", tags=["chat"])
 app.include_router(whatsapp.router, prefix="/whatsapp", tags=["whatsapp"])
 app.include_router(admin.router, prefix="/admin", tags=["admin"])
+
+
+@app.on_event("startup")
+def startup_event():
+    init_db()
+
 
 # Health Check
 @app.get("/health", summary="Verifica el estado de salud de la API")
