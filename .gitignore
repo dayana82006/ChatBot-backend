@@ -1,0 +1,62 @@
+
+# --- Python ---
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.py.class
+
+# Virtual environments
+.venv/
+env/
+venv/
+ENV/
+*.env
+
+# Byte-compiled / optimized / DLL files
+*.so
+*.dll
+*.dylib
+
+# Logs
+*.log
+*.out
+*.err
+
+# SQLite databases
+*.db
+*.sqlite3
+
+# Coverage / testing
+htmlcov/
+.tox/
+.nox/
+.coverage
+.coverage.*
+.cache
+.pytest_cache/
+.mypy_cache/
+.dmypy.json
+dmypy.json
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# --- FastAPI ---
+# Ignore generated openapi.json (if you export it)
+openapi.json
+
+# --- Docker ---
+/data/
+docker-compose.override.yml
+*.pid
+
+# --- IDEs & Editors ---
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# --- OS ---
+.DS_Store
+Thumbs.db
