@@ -12,3 +12,5 @@ python-dotenv==1.0.1
 # python-multipart # para subir archivos si se implementa, pero fuera de MVP
 # httpx # para clientes HTTP, si es necesario para interactuar con APIs externas
 # requests # Alternativa a httpx
+
+mysql-connector-python==9.0.0
