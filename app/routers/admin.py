@@ -1,12 +1,15 @@
 # backend/app/routers/admin.py
 from fastapi import APIRouter, Query, HTTPException
+from fastapi import APIRouter, Query, HTTPException
 from pydantic import BaseModel
 from typing import List, Optional
 import datetime
 import logging
 
-router = APIRouter()
+router = APIRouter(prefix="/admin", tags=["Admin"])
 logger = logging.getLogger(__name__)
+
+# ==== Pydantic Schemas ====
 
 class ChatSummary(BaseModel):
     user_id: str
@@ -21,12 +24,15 @@ class ChatListResponse(BaseModel):
 
 class ChatMessage(BaseModel):
     role: str  # "user" or "assistant"
+    role: str  # "user" or "assistant"
     text: str
     ts: datetime.datetime
 
 class ChatDetailResponse(BaseModel):
     user_id: str
     messages: List[ChatMessage]
+
+# ==== Endpoints ====
 
 @router.get("/chats", response_model=ChatListResponse, summary="Lista de chats de usuarios")
 async def list_chats(
@@ -36,17 +42,40 @@ async def list_chats(
 ):
     """
     Endpoint para obtener un listado paginado y filtrado de los chats de usuarios (solo WhatsApp).
+    Endpoint para obtener un listado paginado y filtrado de los chats de usuarios (solo WhatsApp).
     """
     logger.info(f"Admin: Listing chats - page={page}, limit={limit}, search={search}")
     
+    logger.info(f"Admin: Listing chats - page={page}, limit={limit}, search={search}")
+
+    # Todos los chats son considerados de WhatsApp
     dummy_chats = [
         ChatSummary(user_id="+573001234567", last_message="Hola IZA, cómo estás?", updated_at=datetime.datetime.now(), count=3),
         ChatSummary(user_id="+573001111111", last_message="Quiero saber más del servicio", updated_at=datetime.datetime.now() - datetime.timedelta(minutes=30), count=5),
         ChatSummary(user_id="+573002222222", last_message="¿Cuánto cuesta?", updated_at=datetime.datetime.now() - datetime.timedelta(hours=1), count=2),
+        ChatSummary(
+            user_id="+573001234567",
+            last_message="Hola IZA, cómo estás?",
+            updated_at=datetime.datetime.now() - datetime.timedelta(hours=1),
+            count=3
+        ),
+        ChatSummary(
+            user_id="+573009876543",
+            last_message="¿Tienen soporte los domingos?",
+            updated_at=datetime.datetime.now() - datetime.timedelta(days=1),
+            count=4
+        ),
     ]
 
+    # Filtro por búsqueda (user_id o último mensaje)
     filtered_chats = dummy_chats
     if search:
+        filtered_chats = [
+            c for c in filtered_chats
+            if search.lower() in c.user_id.lower() or search.lower() in c.last_message.lower()
+        ]
+
+    # Paginación
         filtered_chats = [
             c for c in filtered_chats
             if search.lower() in c.user_id.lower() or search.lower() in c.last_message.lower()
@@ -59,9 +88,11 @@ async def list_chats(
 
     return ChatListResponse(items=paginated_chats, page=page, total=total_items)
 
+
 @router.get("/chats/{user_id}", response_model=ChatDetailResponse, summary="Detalle de un chat específico")
 async def get_chat_detail(user_id: str):
     """
+    Endpoint para obtener el historial completo de mensajes de un chat específico (solo WhatsApp).
     Endpoint para obtener el historial completo de mensajes de un chat específico (solo WhatsApp).
     """
     logger.info(f"Admin: Getting chat detail for user_id={user_id}")
@@ -70,7 +101,23 @@ async def get_chat_detail(user_id: str):
         messages = [
             ChatMessage(role="user", text="Hola IZA, cómo estás?", ts=datetime.datetime.now() - datetime.timedelta(hours=1)),
             ChatMessage(role="assistant", text="¡Hola! Estoy muy bien, listo para ayudarte. ¿En qué puedo asistirte hoy?", ts=datetime.datetime.now() - datetime.timedelta(hours=1, minutes=-1)),
+
+    if user_id == "+573001234567":
+        messages = [
+            ChatMessage(
+                role="user",
+                text="Hola IZA, cómo estás?",
+                ts=datetime.datetime.now() - datetime.timedelta(hours=1)
+            ),
+            ChatMessage(
+                role="assistant",
+                text="¡Hola! Estoy muy bien, listo para ayudarte. ¿En qué puedo asistirte hoy?",
+                ts=datetime.datetime.now() - datetime.timedelta(hours=1, minutes=-1)
+            ),
         ]
         return ChatDetailResponse(user_id=user_id, messages=messages)
 
+        return ChatDetailResponse(user_id=user_id, messages=messages)
+
     raise HTTPException(status_code=404, detail="Chat not found")
+
