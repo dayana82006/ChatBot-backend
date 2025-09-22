@@ -9,3 +9,13 @@ def get_connection():
         database=settings.DB_NAME,
         port=settings.DB_PORT
     )
+
+
+def init_db():
+    try:
+        conn = get_connection()
+        conn.close()
+        print("✅ Conexión a la base de datos exitosa")
+    except Exception as e:
+        print("❌ Error al conectar con la base de datos:", e)
+        raise e

@@ -14,7 +14,7 @@ class Settings(BaseSettings):
     DB_USER: str  = os.getenv("DB_USER", "root")
     DB_PASSWORD: str = os.getenv("DB_PASSWORD", "")
     DB_NAME: str = os.getenv("DB_NAME", "chatbot_db")
-    DB_PORT: str = int(os.getenv("DB_PORT", 3306))
+    DB_PORT: int = int(os.getenv("DB_PORT", 3306))
 
 
     OPENAI_API_KEY: Optional[str] = None
