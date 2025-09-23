@@ -9,7 +9,7 @@ router = APIRouter()
 logger = logging.getLogger(__name__)
 
 # 👉 Verificación del webhook
-@router.get("/whatsapp/webhook", summary="Verificación del webhook de WhatsApp")
+@router.get("/webhook", summary="Verificación del webhook de WhatsApp")
 async def verify_whatsapp_webhook(request: Request):
     """
     Endpoint para verificación del webhook: WhatsApp envía hub.mode, hub.verify_token, hub.challenge.
@@ -26,7 +26,7 @@ async def verify_whatsapp_webhook(request: Request):
         raise HTTPException(status_code=403, detail="Verification failed")
 
 # 👉 Recepción de mensajes
-@router.post("/whatsapp/webhook", summary="Recepción de mensajes de WhatsApp")
+@router.post("/webhook", summary="Recepción de mensajes de WhatsApp")
 async def whatsapp_webhook_handler(request: Request):
     """
     Endpoint para recibir mensajes entrantes de WhatsApp via Meta Graph API.

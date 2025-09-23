@@ -29,6 +29,7 @@ class Settings(BaseSettings):
     # WhatsApp
     WHATSAPP_TOKEN: Optional[str] = os.getenv("WHATSAPP_TOKEN")
     WHATSAPP_PHONE_ID: Optional[str] = os.getenv("WHATSAPP_PHONE_ID")
+    WHATSAPP_VERIFY_TOKEN: Optional[str] = os.getenv("WHATSAPP_VERIFY_TOKEN")
     GRAPH_URL: ClassVar[str] = f"https://graph.facebook.com/v17.0/{os.getenv('WHATSAPP_PHONE_ID')}"
 
     # Telegram
