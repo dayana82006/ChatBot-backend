@@ -19,3 +19,6 @@ def init_db():
     except Exception as e:
         print("❌ Error al conectar con la base de datos:", e)
         raise e
+    
+
+
