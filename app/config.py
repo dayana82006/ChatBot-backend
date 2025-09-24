@@ -5,7 +5,6 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file='.env', extra='ignore')
 
@@ -16,33 +15,46 @@ class Settings(BaseSettings):
     DB_NAME: str = os.getenv("DB_NAME", "chatbot_db")
     DB_PORT: int = int(os.getenv("DB_PORT", 3306))
 
-    OPENAI_API_KEY: Optional[str] = None
-    USE_OPENAI_EMBEDDINGS: bool = False
-    QDRANT_URL: str = "http://qdrant:6333"
-    QDRANT_COLLECTION: str = "company_kb"
-    EMBED_MODEL: str = "intfloat/multilingual-e5-small"
-    FRONTEND_ORIGIN: str = "http://localhost:5173"
-
-    # 👉 Lista de orígenes permitidos para CORS
-    BACKEND_CORS_ORIGINS: List[str] = ["http://localhost:5173", "http://localhost:3000"]
+    # OpenAI/LLM
+    OPENAI_API_KEY: str = os.getenv("OPENAI_API_KEY", "")
+    LLM_MODEL_NAME: str = os.getenv("LLM_MODEL_NAME", "gpt-3.5-turbo")
+    
+    # Embeddings
+    USE_OPENAI_EMBEDDINGS: bool = os.getenv("USE_OPENAI_EMBEDDINGS", "false").lower() == "true"
+    EMBED_MODEL: str = os.getenv("EMBED_MODEL", "intfloat/multilingual-e5-small")
+    
+    # Qdrant
+    QDRANT_URL: str = os.getenv("QDRANT_URL", "http://localhost:6333")
+    QDRANT_COLLECTION: str = os.getenv("QDRANT_COLLECTION", "company_kb")
+    
+    # RAG
+    RAG_TOP_K: int = int(os.getenv("RAG_TOP_K", "3"))
+    RAG_SCORE_THRESHOLD: float = float(os.getenv("RAG_SCORE_THRESHOLD", "0.7"))
+    
+    # CORS
+    FRONTEND_ORIGIN: str = os.getenv("FRONTEND_ORIGIN", "http://localhost:5173")
+    BACKEND_CORS_ORIGINS: List[str] = [
+        "http://localhost:5173", 
+        "http://localhost:3000",
+        os.getenv("FRONTEND_ORIGIN", "http://localhost:5173")
+    ]
 
     # WhatsApp
     WHATSAPP_TOKEN: Optional[str] = os.getenv("WHATSAPP_TOKEN")
     WHATSAPP_PHONE_ID: Optional[str] = os.getenv("WHATSAPP_PHONE_ID")
     WHATSAPP_VERIFY_TOKEN: Optional[str] = os.getenv("WHATSAPP_VERIFY_TOKEN")
-    GRAPH_URL: ClassVar[str] = f"https://graph.facebook.com/v17.0/{os.getenv('WHATSAPP_PHONE_ID')}"
+    
+    @property
+    def GRAPH_URL(self) -> str:
+        if self.WHATSAPP_PHONE_ID:
+            return f"https://graph.facebook.com/v17.0/{self.WHATSAPP_PHONE_ID}/messages"
+        return ""
 
     # Telegram
-    TELEGRAM_BOT_TOKEN: Optional[str] = None
-    PUBLIC_BASE_URL: Optional[str] = None  # webhook de Telegram
+    TELEGRAM_BOT_TOKEN: Optional[str] = os.getenv("TELEGRAM_BOT_TOKEN")
+    PUBLIC_BASE_URL: Optional[str] = os.getenv("PUBLIC_BASE_URL")
 
-    # Persistencia de chats
-    DATABASE_URL: str = "sqlite:///./sql_app.db"  # SQLite por defecto
-
-    # Configuración de Langroid/LLM
-    LLM_MODEL_NAME: str = "gpt-3.5-turbo"  # Opcional, para futuros ajustes del LLM
-    RAG_TOP_K: int = 3
-    RAG_SCORE_THRESHOLD: float = 0.7
-
+    # Database URL (SQLite por defecto como especifica el requerimiento)
+    DATABASE_URL: str = os.getenv("DATABASE_URL", "sqlite:///./sql_app.db")
 
 settings = Settings()

@@ -1,108 +1,158 @@
-
-from fastapi import APIRouter, Query, HTTPException
-from pydantic import BaseModel
+from fastapi import APIRouter, Query, HTTPException, Depends
+from pydantic import BaseModel, Field
 from typing import List, Optional
 import datetime
 import logging
+from app.queries.chatQueries import get_all_chats_with_summary
+from app.queries.messageQueries import get_messages_by_chat
+from app.queries.chatQueries import get_chat_by_user
 
 router = APIRouter(prefix="/admin", tags=["Admin"])
 logger = logging.getLogger(__name__)
 
-# ==== Pydantic Schemas ====
-
+# Modelos Pydantic
 class ChatSummary(BaseModel):
-    user_id: str
-    last_message: str
-    updated_at: datetime.datetime
-    count: int
+    user_id: str = Field(..., description="ID del usuario")
+    channel: str = Field(..., description="Canal (web, whatsapp, telegram)")
+    last_message: Optional[str] = Field(None, description="Último mensaje")
+    updated_at: datetime.datetime = Field(..., description="Última actualización")
+    count: int = Field(..., description="Número total de mensajes")
 
 class ChatListResponse(BaseModel):
-    items: List[ChatSummary]
-    page: int
-    total: int
+    items: List[ChatSummary] = Field(..., description="Lista de chats")
+    page: int = Field(..., description="Página actual")
+    total: int = Field(..., description="Total de elementos")
 
 class ChatMessage(BaseModel):
-    role: str  # "user" or "assistant"
-    text: str
-    ts: datetime.datetime
+    role: str = Field(..., description="Rol (user o assistant)")
+    text: str = Field(..., description="Contenido del mensaje")
+    ts: datetime.datetime = Field(..., description="Timestamp del mensaje", alias="timestamp")
 
 class ChatDetailResponse(BaseModel):
-    user_id: str
-    messages: List[ChatMessage]
+    user_id: str = Field(..., description="ID del usuario")
+    channel: str = Field(..., description="Canal de comunicación")
+    messages: List[ChatMessage] = Field(..., description="Lista de mensajes")
 
-@router.get("/chats", response_model=ChatListResponse, summary="Lista de chats de usuarios")
+@router.get("/chats", response_model=ChatListResponse, summary="Lista paginada de chats")
 async def list_chats(
-    page: int = Query(1, ge=1),
-    limit: int = Query(10, ge=1, le=100),
-    search: Optional[str] = None,
+    page: int = Query(1, ge=1, description="Número de página"),
+    limit: int = Query(10, ge=1, le=100, description="Elementos por página"),
+    search: Optional[str] = Query(None, description="Búsqueda por user_id o contenido"),
+    channel: Optional[str] = Query(None, description="Filtrar por canal")
 ):
     """
-    Endpoint para obtener un listado paginado y filtrado de los chats de usuarios (solo WhatsApp).
-    """
-    logger.info(f"Admin: Listing chats - page={page}, limit={limit}, search={search}")
-
+    Obtiene una lista paginada de todos los chats de usuarios.
     
-    dummy_chats = [
-        ChatSummary(user_id="+573001234567", last_message="Hola IZA, cómo estás?", updated_at=datetime.datetime.now(), count=3),
-        ChatSummary(user_id="+573001111111", last_message="Quiero saber más del servicio", updated_at=datetime.datetime.now() - datetime.timedelta(minutes=30), count=5),
-        ChatSummary(user_id="+573002222222", last_message="¿Cuánto cuesta?", updated_at=datetime.datetime.now() - datetime.timedelta(hours=1), count=2),
-
-
-        ChatSummary(
-            user_id="+573001234567",
-            last_message="Hola IZA, cómo estás?",
-            updated_at=datetime.datetime.now() - datetime.timedelta(hours=1),
-            count=3
-        ),
-        ChatSummary(
-            user_id="+573009876543",
-            last_message="¿Tienen soporte los domingos?",
-            updated_at=datetime.datetime.now() - datetime.timedelta(days=1),
-            count=4
-        ),
-    ]
-
-    # Filtro por búsqueda (user_id o último mensaje)
-    filtered_chats = dummy_chats
-    if search:
-        filtered_chats = [
-            c for c in filtered_chats
-            if search.lower() in c.user_id.lower() or search.lower() in c.last_message.lower()
-        ]
-
-    # Paginación
-    total_items = len(filtered_chats)
-    start_index = (page - 1) * limit
-    end_index = start_index + limit
-    paginated_chats = filtered_chats[start_index:end_index]
-
-    return ChatListResponse(items=paginated_chats, page=page, total=total_items)
-
-
-@router.get("/chats/{user_id}", response_model=ChatDetailResponse, summary="Detalle de un chat específico")
-async def get_chat_detail(user_id: str):
+    Soporta:
+    - **Paginación**: page y limit
+    - **Búsqueda**: por user_id o contenido del último mensaje
+    - **Filtrado**: por canal (web, whatsapp, telegram)
     """
-    Endpoint para obtener el historial completo de mensajes de un chat específico (solo WhatsApp).
+    try:
+        logger.info(f"Admin: Listing chats - page={page}, limit={limit}, search={search}, channel={channel}")
+        
+        # Obtener chats de la base de datos
+        result = get_all_chats_with_summary(
+            page=page,
+            limit=limit,
+            search=search,
+            channel=channel
+        )
+        
+        # Convertir a objetos Pydantic
+        chat_summaries = []
+        for item in result["items"]:
+            summary = ChatSummary(
+                user_id=item["user_id"],
+                channel=item["channel"] or "web",
+                last_message=item["last_message"] or "Sin mensajes",
+                updated_at=item["updated_at"],
+                count=item["count"] or 0
+            )
+            chat_summaries.append(summary)
+        
+        return ChatListResponse(
+            items=chat_summaries,
+            page=result["page"],
+            total=result["total"]
+        )
+        
+    except Exception as e:
+        logger.exception(f"Error listing chats: {e}")
+        raise HTTPException(status_code=500, detail="Error interno del servidor")
+
+@router.get("/chats/{user_id}", response_model=ChatDetailResponse, summary="Detalle de chat específico")
+async def get_chat_detail(
+    user_id: str,
+    channel: str = Query("web", description="Canal del chat")
+):
     """
-    logger.info(f"Admin: Getting chat detail for user_id={user_id}")
+    Obtiene el historial completo de mensajes de un chat específico.
+    
+    - **user_id**: ID del usuario
+    - **channel**: Canal de comunicación (web, whatsapp, telegram)
+    """
+    try:
+        logger.info(f"Admin: Getting chat detail for user_id={user_id}, channel={channel}")
+        
+        # Buscar el chat
+        chat = get_chat_by_user(user_id, channel)
+        if not chat:
+            raise HTTPException(
+                status_code=404, 
+                detail=f"Chat no encontrado para user_id={user_id}, channel={channel}"
+            )
+        
+        # Obtener mensajes del chat
+        messages = get_messages_by_chat(chat["id"])
+        
+        # Convertir mensajes a objetos Pydantic
+        chat_messages = []
+        for msg in messages:
+            chat_message = ChatMessage(
+                role=msg["role"],
+                text=msg["text"],
+                timestamp=msg["timestamp"]
+            )
+            chat_messages.append(chat_message)
+        
+        return ChatDetailResponse(
+            user_id=user_id,
+            channel=chat["channel"] or "web",
+            messages=chat_messages
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception(f"Error getting chat detail: {e}")
+        raise HTTPException(status_code=500, detail="Error interno del servidor")
 
-    if user_id == "+573001234567":
-        messages = [
-         ChatMessage(role="user", text="Hola IZA, cómo estás?", ts=datetime.datetime.now() - datetime.timedelta(hours=1)),
-            ChatMessage(role="assistant", text="¡Hola! Estoy muy bien, listo para ayudarte. ¿En qué puedo asistirte hoy?", ts=datetime.datetime.now() - datetime.timedelta(hours=1, minutes=-1)),
-
-            ChatMessage(
-                role="user",
-                text="Hola IZA, cómo estás?",
-                ts=datetime.datetime.now() - datetime.timedelta(hours=1)
-            ),
-            ChatMessage(
-                role="assistant",
-                text="¡Hola! Estoy muy bien, listo para ayudarte. ¿En qué puedo asistirte hoy?",
-                ts=datetime.datetime.now() - datetime.timedelta(hours=1, minutes=-1)
-            ),
-
-        ]
-        return ChatDetailResponse(user_id=user_id, messages=messages)
-
-    raise HTTPException(status_code=404, detail="Chat not found")
+@router.get("/stats", summary="Estadísticas generales")
+async def get_admin_stats():
+    """
+    Obtiene estadísticas generales del sistema.
+    """
+    try:
+        # Obtener estadísticas básicas
+        all_chats = get_all_chats_with_summary(page=1, limit=1000)  # Obtener todos para contar
+        
+        stats = {
+            "total_chats": all_chats["total"],
+            "channels": {
+                "web": len([c for c in all_chats["items"] if c.get("channel", "web") == "web"]),
+                "whatsapp": len([c for c in all_chats["items"] if c.get("channel") == "whatsapp"]),
+                "telegram": len([c for c in all_chats["items"] if c.get("channel") == "telegram"])
+            },
+            "total_messages": sum(c.get("count", 0) for c in all_chats["items"]),
+            "last_activity": max(
+                (c.get("updated_at") for c in all_chats["items"] if c.get("updated_at")),
+                default=None
+            )
+        }
+        
+        return stats
+        
+    except Exception as e:
+        logger.exception(f"Error getting admin stats: {e}")
+        raise HTTPException(status_code=500, detail="Error interno del servidor")

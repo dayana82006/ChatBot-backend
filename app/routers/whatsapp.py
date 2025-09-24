@@ -1,66 +1,71 @@
-# app/routers/whatsapp.py
 from fastapi import APIRouter, Request, HTTPException, Response
 import logging
-from app.services.whatsappService import send_whatsapp_message
-from app.queries.messageQueries import add_message
+from app.services.whatsappService import process_whatsapp_message, validate_whatsapp_config
 from app.config import settings
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
 
-# 👉 Verificación del webhook
 @router.get("/webhook", summary="Verificación del webhook de WhatsApp")
 async def verify_whatsapp_webhook(request: Request):
     """
-    Endpoint para verificación del webhook: WhatsApp envía hub.mode, hub.verify_token, hub.challenge.
+    Endpoint para verificación del webhook de WhatsApp.
+    Meta envía hub.mode, hub.verify_token, hub.challenge.
     """
     params = request.query_params
     mode = params.get("hub.mode")
     token = params.get("hub.verify_token")
     challenge = params.get("hub.challenge")
 
+    logger.info(f"WhatsApp webhook verification: mode={mode}, token_match={token == settings.WHATSAPP_VERIFY_TOKEN}")
+
     if mode == "subscribe" and token == settings.WHATSAPP_VERIFY_TOKEN:
-        logger.info("WhatsApp webhook verified successfully!")
-        return Response(content=challenge or "", media_type="text/plain")
+        logger.info("✅ WhatsApp webhook verificado exitosamente")
+        return Response(content=challenge, media_type="text/plain")
     else:
+        logger.warning("❌ WhatsApp webhook verification failed")
         raise HTTPException(status_code=403, detail="Verification failed")
 
-# 👉 Recepción de mensajes
 @router.post("/webhook", summary="Recepción de mensajes de WhatsApp")
 async def whatsapp_webhook_handler(request: Request):
     """
     Endpoint para recibir mensajes entrantes de WhatsApp via Meta Graph API.
-    Guarda el mensaje en DB y responde automáticamente.
+    Procesa el mensaje y responde automáticamente usando el agente IZA.
     """
-    payload = await request.json()
-    logger.info(f"Received WhatsApp webhook payload: {payload}")
-
     try:
-        # 📌 Extraer info del payload
-        entry = payload.get("entry", [])[0]
-        changes = entry.get("changes", [])[0]
-        value = changes.get("value", {})
-        messages = value.get("messages", [])
+        # Validar configuración
+        if not validate_whatsapp_config():
+            raise HTTPException(
+                status_code=500,
+                detail="WhatsApp not properly configured"
+            )
 
-        if not messages:
-            return {"status": "ignored"}
+        payload = await request.json()
+        logger.debug(f"WhatsApp webhook payload: {payload}")
 
-        message = messages[0]
-        from_number = message["from"]  # número del usuario
-        text = message.get("text", {}).get("body", "")
+        # Procesar mensaje
+        result = await process_whatsapp_message(payload)
 
-        # 📌 Guardar mensaje en DB
-        chat_id = value.get("metadata", {}).get("phone_number_id")
-        add_message(chat_id=chat_id, role="user", text=text)
+        if result in ["no_entry", "no_changes", "no_message"]:
+            logger.debug(f"WhatsApp webhook ignored: {result}")
+            return {"status": "ignored", "reason": result}
 
-        # 📌 Preparar respuesta (aquí podrías llamar a tu agente IA)
-        reply_text = f"Echo: {text}"
+        return {"status": "sent", "reply": result}
 
-        # 📌 Enviar respuesta a WhatsApp
-        send_whatsapp_message(to=from_number, message=reply_text)
-
-        return {"status": "sent", "reply": reply_text}
-
+    except HTTPException:
+        raise
     except Exception as e:
-        logger.exception("Error processing incoming WhatsApp message")
+        logger.exception("Error processing WhatsApp webhook")
         raise HTTPException(status_code=500, detail=str(e))
+
+@router.get("/status", summary="Estado de configuración de WhatsApp")
+async def whatsapp_status():
+    """Endpoint para verificar el estado de la configuración de WhatsApp"""
+    config_status = validate_whatsapp_config()
+    
+    return {
+        "configured": config_status,
+        "webhook_url": f"{settings.PUBLIC_BASE_URL}/whatsapp/webhook" if hasattr(settings, 'PUBLIC_BASE_URL') and settings.PUBLIC_BASE_URL else None,
+        "phone_id": settings.WHATSAPP_PHONE_ID,
+        "verify_token_set": bool(settings.WHATSAPP_VERIFY_TOKEN)
+    }
