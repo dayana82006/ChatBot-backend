@@ -1,4 +1,3 @@
-# app/services/whatsapp_service.py
 import logging
 import httpx
 from typing import Dict, Any
