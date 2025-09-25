@@ -70,4 +70,4 @@ def get_embedding_dimension() -> int:
             "BAAI/bge-small-en-v1.5": 384,
             "sentence-transformers/all-MiniLM-L6-v2": 384,
         }
-        return dimensions.get(EMBED_MODEL, 384)
+        return dimensions.get(EMBED_MODEL, 384) 
