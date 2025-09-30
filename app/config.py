@@ -1,5 +1,5 @@
 from pydantic_settings import BaseSettings, SettingsConfigDict
-from typing import Optional, List, ClassVar
+from typing import Optional, List
 import os
 from dotenv import load_dotenv
 
@@ -14,10 +14,15 @@ class Settings(BaseSettings):
     DB_PASSWORD: str = os.getenv("DB_PASSWORD", "")
     DB_NAME: str = os.getenv("DB_NAME", "chatbot_db")
     DB_PORT: int = int(os.getenv("DB_PORT", 3306))
+    DATABASE_URL: str = os.getenv("DATABASE_URL", "sqlite:///./sql_app.db")
 
-    # OpenAI/LLM
+    # Gemini/LLM
+    GEMINI_API_KEY: str = os.getenv("GEMINI_API_KEY", "")
+    USE_GEMINI: bool = os.getenv("USE_GEMINI", "true").lower() == "true"
+    LLM_MODEL_NAME: str = os.getenv("LLM_MODEL_NAME", "gemini-1.5-flash")
+    
+    # OpenAI (legacy, mantener para compatibilidad)
     OPENAI_API_KEY: str = os.getenv("OPENAI_API_KEY", "")
-    LLM_MODEL_NAME: str = os.getenv("LLM_MODEL_NAME", "gpt-3.5-turbo")
     
     # Embeddings
     USE_OPENAI_EMBEDDINGS: bool = os.getenv("USE_OPENAI_EMBEDDINGS", "false").lower() == "true"
@@ -53,8 +58,5 @@ class Settings(BaseSettings):
     # Telegram
     TELEGRAM_BOT_TOKEN: Optional[str] = os.getenv("TELEGRAM_BOT_TOKEN")
     PUBLIC_BASE_URL: Optional[str] = os.getenv("PUBLIC_BASE_URL")
-
-    # Database URL (SQLite por defecto como especifica el requerimiento)
-    DATABASE_URL: str = os.getenv("DATABASE_URL", "sqlite:///./sql_app.db")
 
 settings = Settings()

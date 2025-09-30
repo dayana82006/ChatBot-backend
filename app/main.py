@@ -35,6 +35,12 @@ async def lifespan(app: FastAPI):
         collection_info = get_collection_info()
         logger.info(f"Colección Qdrant: {collection_info}")
         
+        # Verificar Gemini
+        if settings.USE_GEMINI and settings.GEMINI_API_KEY:
+            logger.info("✅ Gemini API configurada")
+        else:
+            logger.warning("⚠️ Gemini no configurada, usando respuestas de fallback")
+        
         logger.info("✅ Aplicación iniciada correctamente")
         
     except Exception as e:
@@ -49,7 +55,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title="Asistente Comercial IZA - MVP",
     version="1.0.0",
-    description="MVP de asistente comercial omnicanal con RAG sobre Qdrant, accesible vía Web y WhatsApp",
+    description="MVP de asistente comercial omnicanal con RAG sobre Qdrant y Gemini, accesible vía Web y WhatsApp",
     lifespan=lifespan,
     docs_url="/docs",
     redoc_url="/redoc"
@@ -67,8 +73,6 @@ app.add_middleware(
 # Middleware de logging para requests
 @app.middleware("http")
 async def log_requests(request: Request, call_next):
-    start_time = request.state.start_time = request.headers.get("X-Request-Start")
-    
     # Log request
     logger.info(f"🔍 {request.method} {request.url.path} - {request.client.host if request.client else 'unknown'}")
     
@@ -103,14 +107,20 @@ async def health_check():
         except:
             db_status = "error"
         
+        # Verificar Gemini
+        llm_status = "ok" if (settings.USE_GEMINI and settings.GEMINI_API_KEY) else "not_configured"
+        llm_provider = "gemini" if settings.USE_GEMINI else "fallback"
+        
         return {
             "status": "ok",
             "version": "1.0.0",
             "components": {
                 "database": db_status,
                 "qdrant": qdrant_status,
-                "embeddings": "ok",
-                "llm": "ok" if settings.OPENAI_API_KEY else "not_configured"
+                "embeddings": "fastembed" if not settings.USE_OPENAI_EMBEDDINGS else "openai",
+                "llm": llm_status,
+                "llm_provider": llm_provider,
+                "llm_model": settings.LLM_MODEL_NAME if settings.USE_GEMINI else "fallback"
             },
             "qdrant_info": collection_info
         }
@@ -126,7 +136,7 @@ async def health_check():
 async def root():
     """Endpoint raíz de la API"""
     return {
-        "message": "Asistente Comercial IZA - API v1.0.0",
+        "message": "Asistente Comercial IZA - API v1.0.0 (Powered by Google Gemini)",
         "docs": "/docs",
         "health": "/health"
     }
