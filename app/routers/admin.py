@@ -33,53 +33,50 @@ class ChatDetailResponse(BaseModel):
     channel: str = Field(..., description="Canal de comunicación")
     messages: List[ChatMessage] = Field(..., description="Lista de mensajes")
 
-@router.get("/chats", response_model=ChatListResponse, summary="Lista paginada de chats")
-async def list_chats(
-    page: int = Query(1, ge=1, description="Número de página"),
-    limit: int = Query(10, ge=1, le=100, description="Elementos por página"),
-    search: Optional[str] = Query(None, description="Búsqueda por user_id o contenido"),
-    channel: Optional[str] = Query(None, description="Filtrar por canal")
-):
+# ✅ Nuevo endpoint: lista todos los chats con sus mensajes
+@router.get("/chats/", summary="Lista todos los chats con sus mensajes")
+async def list_all_chats_with_messages():
     """
-    Obtiene una lista paginada de todos los chats de usuarios.
-    
-    Soporta:
-    - **Paginación**: page y limit
-    - **Búsqueda**: por user_id o contenido del último mensaje
-    - **Filtrado**: por canal (web, whatsapp, telegram)
+    Obtiene todos los chats con todos sus mensajes (sin paginación).
     """
     try:
-        logger.info(f"Admin: Listing chats - page={page}, limit={limit}, search={search}, channel={channel}")
-        
-        # Obtener chats de la base de datos
-        result = get_all_chats_with_summary(
-            page=page,
-            limit=limit,
-            search=search,
-            channel=channel
-        )
-        
-        # Convertir a objetos Pydantic
-        chat_summaries = []
-        for item in result["items"]:
-            summary = ChatSummary(
-                user_id=item["user_id"],
-                channel=item["channel"] or "web",
-                last_message=item["last_message"] or "Sin mensajes",
-                updated_at=item["updated_at"],
-                count=item["count"] or 0
-            )
-            chat_summaries.append(summary)
-        
-        return ChatListResponse(
-            items=chat_summaries,
-            page=result["page"],
-            total=result["total"]
-        )
-        
+        logger.info("Admin: Listing all chats with messages")
+
+        # Traer todos los chats (sin paginación, límite alto para traerlos todos)
+        result = get_all_chats_with_summary(page=1, limit=10000)
+
+        chats_with_messages = []
+        for chat in result["items"]:
+            # Traer mensajes de cada chat
+            messages = get_messages_by_chat(chat["id"])
+            msg_list = [
+                {
+                    "id": msg["id"],
+                    "role": msg["role"],
+                    "text": msg["text"],
+                    "timestamp": msg["timestamp"]
+                }
+                for msg in messages
+            ]
+
+            chats_with_messages.append({
+                "id": chat["id"],
+                "user_id": chat["user_id"],
+                "channel": chat["channel"] or "web",
+                "created_at": chat["created_at"],
+                "updated_at": chat["updated_at"],
+                "messages": msg_list
+            })
+
+        return {
+            "total": result["total"],
+            "items": chats_with_messages
+        }
+
     except Exception as e:
-        logger.exception(f"Error listing chats: {e}")
+        logger.exception(f"Error listing all chats with messages: {e}")
         raise HTTPException(status_code=500, detail="Error interno del servidor")
+
 
 @router.get("/chats/{user_id}", response_model=ChatDetailResponse, summary="Detalle de chat específico")
 async def get_chat_detail(

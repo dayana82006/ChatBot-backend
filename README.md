@@ -80,8 +80,19 @@ Health check (para validar que el backend corre):
 ```bash
 # Backend
 git clone <url-del-repositorio>
+
 cd nameProject
-pip install -r requirements.txt
+# Crear entorno virtual
+python -m venv .venv
+
+# Activar entorno virtual
+# En Windows:
+.venv\Scripts\activate
+
+# En macOS/Linux:
+source .venv/bin/activate
+
+
 ```
 
  **Instalar dependencias**

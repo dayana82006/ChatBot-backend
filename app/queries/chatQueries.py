@@ -52,22 +52,73 @@ def get_or_create_chat(user_id: str, channel: str = "web") -> int:
         return chat['id']
     return create_chat(user_id, channel)
 
-def get_all_chats_with_summary(page: int = 1, limit: int = 10, search: Optional[str] = None, channel: Optional[str] = None) -> Dict[str, Any]:
+
+def get_all_chats_with_summary(
+    page: int = 1,
+    limit: int = 10,
+    search: Optional[str] = None,
+    channel: Optional[str] = None
+) -> Dict[str, Any]:
     """Obtiene todos los chats con resumen para el panel admin"""
     conn = get_connection()
     cursor = conn.cursor(dictionary=True)
     try:
-        # Construir query base
-        base_query = """
-        SELECT 
-            c.user_id,
-            c.channel,
-            c.updated_at,
-            COUNT(m.id) as count,
-            (SELECT m2.text FROM messages m2 WHERE m2.chat_id = c.id ORDER BY m2.timestamp DESC LIMIT 1) as last_message
-        FROM chats c
-        LEFT JOIN messages m ON c.id = m.chat_id
+        where_clauses = []
+        params = {}
+
+        if search:
+            where_clauses.append("c.user_id LIKE %(search)s")
+            params["search"] = f"%{search}%"
+        if channel:
+            where_clauses.append("c.channel = %(channel)s")
+            params["channel"] = channel
+
+        where_sql = "WHERE " + " AND ".join(where_clauses) if where_clauses else ""
+
+        # Query para los chats resumidos
+        query = f"""
+            SELECT 
+                c.id,
+                c.user_id,
+                c.channel,
+                c.created_at,
+                c.updated_at,
+                COUNT(m.id) as count,
+                (
+                    SELECT m2.text 
+                    FROM messages m2 
+                    WHERE m2.chat_id = c.id 
+                    ORDER BY m2.timestamp DESC 
+                    LIMIT 1
+                ) as last_message
+            FROM chats c
+            LEFT JOIN messages m ON c.id = m.chat_id
+            {where_sql}
+            GROUP BY c.id
+            ORDER BY c.updated_at DESC
+            LIMIT %(limit)s OFFSET %(offset)s
         """
+        params["limit"] = limit
+        params["offset"] = (page - 1) * limit
+
+        cursor.execute(query, params)
+        items = cursor.fetchall()
+
+        # Query para contar el total
+        count_query = f"""
+            SELECT COUNT(*) as total
+            FROM chats c
+            {where_sql}
+        """
+        cursor.execute(count_query, params)
+        total = cursor.fetchone()["total"]
+
+        return {
+            "items": items,
+            "page": page,
+            "total": total
+        }
+
     finally:
         cursor.close()
         conn.close()

@@ -219,7 +219,7 @@ def generate_fallback_response(user_message: str, context: str) -> str:
     """Respuesta de fallback cuando Gemini no está disponible"""
     if not context or context == "No se encontró información relevante en la base de conocimiento.":
         return (
-            "¡Hola! Soy IZA, tu asistente comercial de café Que Rico. "
+            "¡Hola! Soy IZA, tu asistente comercial de café. "
             "En este momento no tengo información específica sobre tu consulta, "
             "pero estaré encantada de conectarte con nuestro equipo de ventas. "
             "¿Podrías contarme más detalles sobre lo que necesitas?"
