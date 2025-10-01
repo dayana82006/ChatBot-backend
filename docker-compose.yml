@@ -1,3 +1,5 @@
+version: "3.8"
+
 services:
   qdrant:
     image: qdrant/qdrant:latest
@@ -25,7 +27,39 @@ services:
       - .:/app
     depends_on:
       - qdrant
+      - mysql
+    environment:
+      QDRANT_URL: http://qdrant:6333/
+      QDRANT_COLLECTION: company_kb
+      RAG_TOP_K: 3
+      RAG_SCORE_THRESHOLD: 0.7
+      FRONTEND_ORIGIN: http://localhost:5173/
+      DB_HOST: mysql
+      DB_USER: valen
+      DB_PASSWORD: valen
+      DB_NAME: chatbot_db
+      DB_PORT: 3306
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+
+  mysql:
+    image: mysql:8.0
+    container_name: mysql_db
+    environment:
+      MYSQL_ROOT_PASSWORD: example_password
+      MYSQL_DATABASE: chatbot_db
+      MYSQL_USER: valen
+      MYSQL_PASSWORD: valen
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 10s
+      retries: 5
+      start_period: 30s
+      timeout: 5s
 
 volumes:
   qdrant_data:
+  mysql_data:
