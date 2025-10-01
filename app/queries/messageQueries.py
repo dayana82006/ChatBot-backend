@@ -1,4 +1,4 @@
-from git import Optional
+from typing import Optional
 from app.database.database import get_connection
 from typing import List, Dict, Any
 import logging
