@@ -91,8 +91,6 @@ python -m venv .venv
 
 # En macOS/Linux:
 source .venv/bin/activate
-
-
 ```
 
  **Instalar dependencias**
@@ -152,7 +150,6 @@ docker run -p 6333:6333 qdrant/qdrant
 # Ejecutar script schema.sql en tu cliente MySQL
 
 # Cargar base de conocimiento
-cd scripts
 python scripts/load_kb.py
 ```
 
@@ -162,6 +159,15 @@ python scripts/load_kb.py
 ```bash
 cd backend
 uvicorn app.main:app --reload --port 8000
+```
+
+### 6. Ejecutar la Ngrok para configuracion del webhook en Meta
+
+**Backend:**
+```bash
+
+ngrok http 8000
+
 ```
 
 ## 🔧 APIs y Endpoints
@@ -193,11 +199,6 @@ La KB incluye información sobre:
 - **Métodos de Pago**: Opciones disponibles
 - **Soporte**: Contactos, garantías, políticas
 
-### Cargar/Actualizar KB
-```bash
-cd scripts
-python load_kb.py
-```
 
 
 **Desarrollado con ❤️ para IZA Café Premium Colombiano**

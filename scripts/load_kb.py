@@ -92,6 +92,72 @@ KB_DOCUMENTS = [
             "precio_max": 95000
         }
     },
+        {
+        "id": str(uuid.uuid4()),
+        "text": "Café Que Rico Sierra Nevada: Café de origen de la Sierra Nevada de Santa Marta, 100% arábica. Tueste medio. Sabor dulce con notas de panela, frutas tropicales y final limpio. Altitud: 1500 msnm. Proceso lavado. Presentaciones: 250g ($36.000) y 500g ($67.000). Disponible en grano entero o molido medio.",
+        "payload": {
+            "title": "Café Sierra Nevada",
+            "source": "catalog",
+            "lang": "es",
+            "tags": ["productos", "sierra-nevada", "dulce", "panelado", "tueste-medio"],
+            "category": "productos",
+            "precio_min": 36000,
+            "precio_max": 67000
+        }
+    },
+    {
+        "id": str(uuid.uuid4()),
+        "text": "Café Que Rico Antioquia Reserva Familiar: Blend especial de pequeños productores de Antioquia. Tueste medio-oscuro. Sabor a cacao, azúcar morena y nueces tostadas. Cuerpo cremoso. Presentaciones: 250g ($33.000) y 500g ($60.000). Disponible en grano o molido fino.",
+        "payload": {
+            "title": "Café Antioquia Reserva Familiar",
+            "source": "catalog",
+            "lang": "es",
+            "tags": ["productos", "antioquia", "reserva", "blend", "cacao"],
+            "category": "productos",
+            "precio_min": 33000,
+            "precio_max": 60000
+        }
+    },
+    {
+        "id": str(uuid.uuid4()),
+        "text": "Café Que Rico Frío Listo (Cold Brew): Café frío listo para tomar, 100% natural sin azúcar añadida. Elaborado con café Huila de tueste medio. Notas a chocolate, frutas y vainilla. Presentación en botella de vidrio de 350ml ($12.000) o 1 litro ($30.000). Mantener refrigerado.",
+        "payload": {
+            "title": "Café Frío Listo (Cold Brew)",
+            "source": "catalog",
+            "lang": "es",
+            "tags": ["productos", "cold-brew", "bebida", "listo", "frio"],
+            "category": "productos",
+            "precio_min": 12000,
+            "precio_max": 30000
+        }
+    },
+    {
+        "id": str(uuid.uuid4()),
+        "text": "Cápsulas Café Que Rico Compatibles con Nespresso: Mezcla especial de café colombiano tueste medio, con notas de chocolate y caramelo. Caja de 10 cápsulas ($22.000) y de 30 cápsulas ($60.000). 100% compostables y biodegradables.",
+        "payload": {
+            "title": "Cápsulas compatibles Nespresso",
+            "source": "catalog",
+            "lang": "es",
+            "tags": ["productos", "capsulas", "nespresso", "sostenible"],
+            "category": "productos",
+            "precio_min": 22000,
+            "precio_max": 60000
+        }
+    },
+    {
+        "id": str(uuid.uuid4()),
+        "text": "Chocolate artesanal Que Rico: Tableta de chocolate 70% cacao con granos de café molido. Elaborado en Santander. Peso 100g ($15.000). Ideal para acompañar café. Ingredientes: cacao, azúcar, manteca de cacao y café molido.",
+        "payload": {
+            "title": "Chocolate artesanal Que Rico",
+            "source": "catalog",
+            "lang": "es",
+            "tags": ["productos", "chocolate", "artesanal", "santander"],
+            "category": "productos",
+            "precio_min": 15000,
+            "precio_max": 15000
+        }
+    },
+
 
     # ==================== PRECIOS Y PRESENTACIONES ====================
     {
@@ -116,6 +182,33 @@ KB_DOCUMENTS = [
             "category": "productos"
         }
     },
+        {
+        "id": str(uuid.uuid4()),
+        "text": """Catálogo completo Café Que Rico (2025):
+
+☕ Café Que Rico Clásico — 250g $25.000 / 500g $45.000
+☕ Café Premium Huila — 250g $38.000 / 500g $70.000
+☕ Café Nariño Orgánico — 250g $42.000 / 500g $78.000
+☕ Café Tolima Intenso — 250g $35.000 / 500g $65.000
+☕ Café Sierra Nevada — 250g $36.000 / 500g $67.000
+☕ Café Antioquia Reserva Familiar — 250g $33.000 / 500g $60.000
+☕ Café Descafeinado — 250g $30.000 / 500g $55.000
+☕ Café Edición Especial — 250g $95.000 (micro-lote)
+🥶 Café Frío Listo (Cold Brew) — 350ml $12.000 / 1L $30.000
+🎯 Cápsulas compatibles Nespresso — 10 cápsulas $22.000 / 30 cápsulas $60.000
+🍫 Chocolate artesanal Que Rico — 100g $15.000
+
+📦 Todos disponibles en grano o molido (fino, medio, grueso según preparación).
+💬 Precios en pesos colombianos (COP).""",
+        "payload": {
+            "title": "Catálogo completo 2025",
+            "source": "catalog",
+            "lang": "es",
+            "tags": ["catalogo", "productos", "lista", "precios"],
+            "category": "productos"
+        }
+    },
+
 
     # ==================== PROMOCIONES Y DESCUENTOS ====================
     {
