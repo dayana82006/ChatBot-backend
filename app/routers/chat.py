@@ -2,6 +2,7 @@ from fastapi import APIRouter, HTTPException, Depends
 from pydantic import BaseModel, Field
 import logging
 from app.services.agent import get_agent_response
+from app.services.websocketService import manager
 from typing import Optional
 
 router = APIRouter()
@@ -16,12 +17,6 @@ class ChatResponse(BaseModel):
 
 @router.post("/", response_model=ChatResponse, summary="Chat con el asistente IZA")
 async def chat_with_assistant(request: ChatRequest):
-    """
-    Endpoint principal para chatear con el asistente IZA.
-    
-    - **message**: El mensaje del usuario
-    - **user_id**: ID del usuario (opcional, se usa 'web_user' por defecto)
-    """
     try:
         # Validación adicional
         if not request.message.strip():
@@ -33,10 +28,27 @@ async def chat_with_assistant(request: ChatRequest):
         user_id = request.user_id or "web_user"
         logger.info(f"💬 Chat request from {user_id}: {request.message}")
 
+        await manager.notify_new_message(
+            user_id=user_id,
+            chat_id=0,  # Puedes obtener el chat_id real si lo guardas en BD
+            role="user",
+            text=request.message.strip(),
+            channel="web"
+        )
+
         # Generar respuesta usando el agente
         reply = await get_agent_response(
             user_id=user_id,
             user_message=request.message.strip(),
+            channel="web"
+        )
+
+        # 🔥 NOTIFICAR RESPUESTA DEL ASISTENTE POR WEBSOCKET
+        await manager.notify_new_message(
+            user_id=user_id,
+            chat_id=0,
+            role="assistant",
+            text=reply,
             channel="web"
         )
 
