@@ -44,13 +44,35 @@ async def process_whatsapp_message(payload: Dict[str, Any]) -> str:
 
         logger.info(f"📱 WhatsApp mensaje de {from_number}: {text}")
 
+        # 🔥 NOTIFICAR MENSAJE DEL USUARIO POR WEBSOCKET
+        await manager.notify_new_message(
+            user_id=from_number,
+            chat_id=0,
+            role="user",
+            text=text,
+            channel="whatsapp"
+        )
+        logger.debug(f"📡 Mensaje de usuario notificado via WebSocket")
+
+        # Generar respuesta del agente
         reply_text = await get_agent_response(
             user_id=from_number,
             user_message=text,
             channel="whatsapp"
         )
 
+        # Enviar respuesta por WhatsApp
         await send_whatsapp_message(to=from_number, message=reply_text)
+
+        # 🔥 NOTIFICAR RESPUESTA DEL ASISTENTE POR WEBSOCKET
+        await manager.notify_new_message(
+            user_id=from_number,
+            chat_id=0,
+            role="assistant",
+            text=reply_text,
+            channel="whatsapp"
+        )
+        logger.debug(f"📡 Respuesta del asistente notificada via WebSocket")
 
         logger.info(f"✅ Respuesta enviada a {from_number}")
         return reply_text
