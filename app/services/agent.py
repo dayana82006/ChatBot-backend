@@ -117,8 +117,9 @@ async def get_agent_response(user_id: str, user_message: str, channel: str = "we
         await push_message_queue(user_id, user_message)
         message_to_process = await pop_message_queue(user_id)
         if not message_to_process:
-            logger.warning(f"No hay mensajes pendientes en la cola de {user_id}")
-            return "No hay mensajes pendientes."
+            logger.warning(f"No hay mensajes pendientes en la cola de {user_id}, usando mensaje actual.")
+            message_to_process = user_message
+
 
         # 2️⃣ Recuperar sesión y contexto desde Redis
         session = await get_user_session(user_id) or {}
