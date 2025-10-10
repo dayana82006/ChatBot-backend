@@ -4,7 +4,12 @@ from app.services.qdrant_service import search
 from app.queries.chatQueries import get_or_create_chat
 from app.queries.messageQueries import add_message, get_recent_messages_by_user
 from app.config import settings
-
+from app.services.redisServices import (
+    get_user_session, set_user_session,
+    get_chat_context, add_chat_turn,
+    push_message_queue, pop_message_queue,
+    clear_user_session, clear_chat_context
+)
 logger = logging.getLogger(__name__)
 
 # Intentar importar Google Gemini
@@ -104,14 +109,26 @@ def build_conversation_context(messages: List[Dict[str, Any]]) -> str:
 
 async def get_agent_response(user_id: str, user_message: str, channel: str = "web") -> str:
     """
-    Genera respuesta del agente usando RAG y Gemini
+    Genera respuesta del agente usando Redis, RAG y Gemini.
+    Maneja contexto, sesión y cola de mensajes.
     """
     try:
-        logger.info(f"🧠 Buscando información para: {user_message}")
+        # 1️⃣ Agregar mensaje del usuario a la cola
+        await push_message_queue(user_id, user_message)
+        message_to_process = await pop_message_queue(user_id)
+        if not message_to_process:
+            logger.warning(f"No hay mensajes pendientes en la cola de {user_id}")
+            return "No hay mensajes pendientes."
 
-        # 1️⃣ Buscar información relevante en Qdrant
+        # 2️⃣ Recuperar sesión y contexto desde Redis
+        session = await get_user_session(user_id) or {}
+        chat_context = await get_chat_context(user_id) or []
+
+        logger.info(f"🧠 Procesando mensaje de {user_id} con contexto Redis...")
+
+        # 3️⃣ Buscar información relevante en Qdrant
         fragments = await search(
-            query=user_message,
+            query=message_to_process,
             top_k=settings.RAG_TOP_K,
             score_threshold=settings.RAG_SCORE_THRESHOLD
         )
@@ -119,55 +136,42 @@ async def get_agent_response(user_id: str, user_message: str, channel: str = "we
         kb_context = build_context_from_kb(fragments)
         has_kb_info = bool(kb_context.strip())
 
-        if not has_kb_info:
-            logger.info("⚠️ Qdrant no devolvió información relevante")
-
-        # 2️⃣ Obtener historial de conversación
-        recent_messages = get_recent_messages_by_user(user_id, channel, limit=5)
-        conversation_context = build_conversation_context(recent_messages)
-
-        # 3️⃣ Armar prompt completo
+        # 4️⃣ Construir prompt
+        recent_context_text = "\n".join(
+            [f"{m['role']}: {m['message']}" for m in chat_context[-5:]]
+        )
         prompt = [
             SYSTEM_PROMPT,
             "\n--- CONTEXTO DE CONOCIMIENTO ---",
-            kb_context if has_kb_info else "Sin información relevante en la KB.",
+            kb_context if has_kb_info else "Sin información relevante en KB.",
             "\n--- HISTORIAL DE CONVERSACIÓN ---",
-            conversation_context,
-            "\n--- MENSAJE ACTUAL DEL USUARIO ---",
-            f"Usuario: {user_message}",
-            "\n--- INSTRUCCIONES ---",
-            "Responde únicamente basándote en el contexto de la base de conocimiento."
+            recent_context_text,
+            "\n--- MENSAJE ACTUAL ---",
+            f"Usuario: {message_to_process}",
         ]
-
         full_prompt = "\n".join(prompt)
 
-        # 4️⃣ Generar respuesta con Gemini si está disponible
+        # 5️⃣ Generar respuesta con Gemini o fallback
         if GEMINI_AVAILABLE and settings.GEMINI_API_KEY and settings.USE_GEMINI:
-            logger.info("🚀 Usando Gemini para generar respuesta...")
-            response = await generate_with_gemini(full_prompt, user_message)
+            response = await generate_with_gemini(full_prompt, message_to_process)
         else:
-            logger.warning("⚠️ Gemini no disponible, usando fallback")
-            response = generate_fallback_response(user_message, kb_context)
+            response = generate_fallback_response(message_to_process, kb_context)
 
-        # Si la respuesta vino vacía, usar contexto directo
-        if not response.strip() and has_kb_info:
-            logger.info("🟡 Respuesta vacía, devolviendo texto de KB directamente")
-            response = (
-                f"Encontré esta información relacionada:\n\n{kb_context}\n\n"
-                "¿Te gustaría que te amplíe algún punto?"
-            )
+        # 6️⃣ Guardar en Redis los turnos y la sesión
+        await add_chat_turn(user_id, message_to_process, "user")
+        await add_chat_turn(user_id, response, "assistant")
 
-        # 5️⃣ Guardar la conversación
-        chat_id = get_or_create_chat(user_id, channel)
-        add_message(chat_id, "user", user_message)
-        add_message(chat_id, "assistant", response)
+        session["last_message"] = message_to_process
+        await set_user_session(user_id, session)
 
-        logger.info(f"💬 Respuesta generada para {user_id}: {response[:100]}...")
+        logger.info(f"✅ Respuesta generada para {user_id}: {response[:80]}...")
         return response
 
     except Exception as e:
-        logger.exception(f"💥 Error generando respuesta del agente: {e}")
-        return "Disculpa, en este momento tengo dificultades técnicas. Intenta nuevamente más tarde."
+        logger.exception(f"💥 Error generando respuesta: {e}")
+        await clear_user_session(user_id)
+        await clear_chat_context(user_id)
+        return "Disculpa, hubo un error procesando tu mensaje. Intenta más tarde."
 
 # ============================================================
 # Generación con Gemini

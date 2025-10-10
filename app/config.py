@@ -16,6 +16,18 @@ class Settings(BaseSettings):
     DB_PORT: int = int(os.getenv("DB_PORT", 3306))
     DATABASE_URL: str = os.getenv("DATABASE_URL", "sqlite:///./sql_app.db")
 
+    #  Configuración de Redis (cache)
+    REDIS_HOST: str = os.getenv("REDIS_HOST", "127.0.0.1")
+    REDIS_PORT: int = int(os.getenv("REDIS_PORT", 6379))
+    REDIS_DB: int = int(os.getenv("REDIS_DB", 0))
+    REDIS_PASSWORD: Optional[str] = os.getenv("REDIS_PASSWORD", None)
+
+    #  Configuración de Sesión / Contexto de Chat
+    MAX_CHAT_TURNS: int = int(os.getenv("MAX_CHAT_TURNS", 5))
+    SESSION_EXPIRE: int = int(os.getenv("SESSION_EXPIRE", 1800))
+    CACHE_EXPIRE: int = int(os.getenv("CACHE_EXPIRE", 300))
+
+
     # Gemini/LLM
     GEMINI_API_KEY: str = os.getenv("GEMINI_API_KEY", "")
     USE_GEMINI: bool = os.getenv("USE_GEMINI", "true").lower() == "true"

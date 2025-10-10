@@ -13,7 +13,7 @@ services:
       QDRANT_SERVICE_GRPC_PORT: 6334
       QDRANT_SERVICE_HTTP_PORT: 6333
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:6333/healthz"]
+      test: ["CMD", "curl", "-f", "http://localhost:6333/readyz"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -26,8 +26,12 @@ services:
     volumes:
       - .:/app
     depends_on:
-      - qdrant
-      - mysql
+      mysql:
+        condition: service_healthy
+      qdrant:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
     environment:
       QDRANT_URL: http://qdrant:6333/
       QDRANT_COLLECTION: company_kb
@@ -39,8 +43,12 @@ services:
       DB_PASSWORD: valen
       DB_NAME: chatbot_db
       DB_PORT: 3306
-    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
-
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+    command: >
+      sh -c "echo 'Esperando a que MySQL esté listo...' &&
+             sleep 10 &&
+             uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload"
   mysql:
     image: mysql:8.0
     container_name: mysql_db
@@ -60,6 +68,20 @@ services:
       start_period: 30s
       timeout: 5s
 
+  redis:
+    image: redis:7.2        # 👈 Redis como contenedor
+    container_name: chatbot_redis
+    ports:
+      - "6379:6379"         # 👈 expuesto al host, opcional
+    volumes:
+      - redis_data:/data    # 👈 persistencia de datos
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
 volumes:
   qdrant_data:
   mysql_data:
+  redis_data:
