@@ -10,6 +10,9 @@ from app.services.redisServices import (
     push_message_queue, pop_message_queue,
     clear_user_session, clear_chat_context
 )
+from app.services.UserServices import get_or_create_user
+
+
 logger = logging.getLogger(__name__)
 
 # Intentar importar Google Gemini
@@ -112,7 +115,12 @@ async def get_agent_response(user_id: str, user_message: str, channel: str = "we
     Genera respuesta del agente usando Redis, RAG y Gemini.
     Maneja contexto, sesión y cola de mensajes.
     """
+
     try:
+
+                # 🧩 Verificar o crear usuario antes de procesar el mensaje
+        user_id = await get_or_create_user(user_id, channel=channel)
+
         # 1️⃣ Agregar mensaje del usuario a la cola
         await push_message_queue(user_id, user_message)
         message_to_process = await pop_message_queue(user_id)
