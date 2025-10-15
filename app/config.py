@@ -71,4 +71,4 @@ class Settings(BaseSettings):
     TELEGRAM_BOT_TOKEN: Optional[str] = os.getenv("TELEGRAM_BOT_TOKEN")
     PUBLIC_BASE_URL: Optional[str] = os.getenv("PUBLIC_BASE_URL")
 
-settings = Settings()
+settings = Settings()      

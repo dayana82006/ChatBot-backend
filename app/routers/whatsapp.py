@@ -10,7 +10,7 @@ logger = logging.getLogger(__name__)
 async def verify_whatsapp_webhook(request: Request):
     """
     Endpoint para verificación del webhook de WhatsApp.
-    Meta envía hub.mode, hub.verify_token, hub.challenge.
+    Meta envía hub.mode, hub.verify_token, hub.challenge. 
     """
     params = request.query_params
     mode = params.get("hub.mode")

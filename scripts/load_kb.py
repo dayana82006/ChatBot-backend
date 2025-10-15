@@ -11,452 +11,64 @@ from app.services.qdrant_service import upsert_documents, ensure_collection, get
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Base de conocimiento completa para Café Que Rico
 KB_DOCUMENTS = [
-    # ==================== PRODUCTOS Y VARIEDADES ====================
+    # ==================== CATÁLOGO COMPLETO ====================
     {
-        "id": str(uuid.uuid4()),
-        "text": "Café Que Rico Clásico: Blend suave 100% arábica colombiano, tueste medio. Notas de chocolate, caramelo y nuez. Ideal para método de preparación en prensa francesa o cafetera. Presentaciones: 250g ($25.000) y 500g ($45.000). Disponible en grano entero o molido (fino, medio, grueso).",
-        "payload": {
-            "title": "Café Que Rico Clásico",
-            "source": "catalog",
-            "lang": "es",
-            "tags": ["productos", "clasico", "blend", "tueste-medio"],
-            "category": "productos",
-            "precio_min": 25000,
-            "precio_max": 45000
-        }
-    },
-    {
-        "id": str(uuid.uuid4()),
-        "text": "Café Que Rico Premium Huila: Single-origin de la región de Huila, Colombia. Tueste medio-claro. Perfil de sabor: cítricos, frutas rojas, acidez brillante, cuerpo medio. Altitud: 1600-1800 msnm. Proceso lavado. Presentaciones: 250g ($38.000) y 500g ($70.000). Solo grano entero o molido medio.",
-        "payload": {
-            "title": "Café Premium Huila",
-            "source": "catalog",
-            "lang": "es",
-            "tags": ["productos", "premium", "huila", "single-origin", "frutal"],
-            "category": "productos",
-            "precio_min": 38000,
-            "precio_max": 70000
-        }
-    },
-    {
-        "id": str(uuid.uuid4()),
-        "text": "Café Que Rico Nariño Orgánico: Certificado orgánico internacional. Single-origin de Nariño. Tueste claro. Notas de flores, miel, cítricos dulces. Proceso natural. Sin químicos ni pesticidas. Presentaciones: 250g ($42.000) y 500g ($78.000). Disponible en grano entero o molido fino/medio.",
-        "payload": {
-            "title": "Café Nariño Orgánico",
-            "source": "catalog",
-            "lang": "es",
-            "tags": ["productos", "organico", "narino", "certificado", "natural"],
-            "category": "productos",
-            "precio_min": 42000,
-            "precio_max": 78000
-        }
-    },
-    {
-        "id": str(uuid.uuid4()),
-        "text": "Café Que Rico Tolima Intenso: Single-origin de Tolima. Tueste oscuro. Notas de chocolate amargo, frutos secos, cuerpo robusto. Ideal para espresso. Presentaciones: 250g ($35.000) y 500g ($65.000). Disponible en grano entero o molido fino para espresso.",
-        "payload": {
-            "title": "Café Tolima Intenso",
-            "source": "catalog",
-            "lang": "es",
-            "tags": ["productos", "tolima", "intenso", "espresso", "tueste-oscuro"],
-            "category": "productos",
-            "precio_min": 35000,
-            "precio_max": 65000
-        }
-    },
-    {
-        "id": str(uuid.uuid4()),
-        "text": "Café Que Rico Descafeinado: Proceso suizo de descafeinado (sin químicos). Blend suave, tueste medio. Conserva 98% del sabor original. Notas de caramelo y avellana. Presentaciones: 250g ($30.000) y 500g ($55.000). Solo molido medio.",
-        "payload": {
-            "title": "Café Descafeinado",
-            "source": "catalog",
-            "lang": "es",
-            "tags": ["productos", "descafeinado", "sin-cafeina", "proceso-suizo"],
-            "category": "productos",
-            "precio_min": 30000,
-            "precio_max": 55000
-        }
-    },
-    {
-        "id": str(uuid.uuid4()),
-        "text": "Café Que Rico Edición Especial: Micro-lote limitado que cambia cada mes. Café de competencia o geishas especiales. Tueste personalizado. Precio: $95.000 por 250g. Solo 50 bolsas por mes. Disponible solo en grano entero. Incluye ficha de cata.",
-        "payload": {
-            "title": "Edición Especial Limitada",
-            "source": "catalog",
-            "lang": "es",
-            "tags": ["productos", "especial", "limitado", "geisha", "competencia"],
-            "category": "productos",
-            "precio_min": 95000,
-            "precio_max": 95000
-        }
-    },
-        {
-        "id": str(uuid.uuid4()),
-        "text": "Café Que Rico Sierra Nevada: Café de origen de la Sierra Nevada de Santa Marta, 100% arábica. Tueste medio. Sabor dulce con notas de panela, frutas tropicales y final limpio. Altitud: 1500 msnm. Proceso lavado. Presentaciones: 250g ($36.000) y 500g ($67.000). Disponible en grano entero o molido medio.",
-        "payload": {
-            "title": "Café Sierra Nevada",
-            "source": "catalog",
-            "lang": "es",
-            "tags": ["productos", "sierra-nevada", "dulce", "panelado", "tueste-medio"],
-            "category": "productos",
-            "precio_min": 36000,
-            "precio_max": 67000
-        }
-    },
-    {
-        "id": str(uuid.uuid4()),
-        "text": "Café Que Rico Antioquia Reserva Familiar: Blend especial de pequeños productores de Antioquia. Tueste medio-oscuro. Sabor a cacao, azúcar morena y nueces tostadas. Cuerpo cremoso. Presentaciones: 250g ($33.000) y 500g ($60.000). Disponible en grano o molido fino.",
-        "payload": {
-            "title": "Café Antioquia Reserva Familiar",
-            "source": "catalog",
-            "lang": "es",
-            "tags": ["productos", "antioquia", "reserva", "blend", "cacao"],
-            "category": "productos",
-            "precio_min": 33000,
-            "precio_max": 60000
-        }
-    },
-    {
-        "id": str(uuid.uuid4()),
-        "text": "Café Que Rico Frío Listo (Cold Brew): Café frío listo para tomar, 100% natural sin azúcar añadida. Elaborado con café Huila de tueste medio. Notas a chocolate, frutas y vainilla. Presentación en botella de vidrio de 350ml ($12.000) o 1 litro ($30.000). Mantener refrigerado.",
-        "payload": {
-            "title": "Café Frío Listo (Cold Brew)",
-            "source": "catalog",
-            "lang": "es",
-            "tags": ["productos", "cold-brew", "bebida", "listo", "frio"],
-            "category": "productos",
-            "precio_min": 12000,
-            "precio_max": 30000
-        }
-    },
-    {
-        "id": str(uuid.uuid4()),
-        "text": "Cápsulas Café Que Rico Compatibles con Nespresso: Mezcla especial de café colombiano tueste medio, con notas de chocolate y caramelo. Caja de 10 cápsulas ($22.000) y de 30 cápsulas ($60.000). 100% compostables y biodegradables.",
-        "payload": {
-            "title": "Cápsulas compatibles Nespresso",
-            "source": "catalog",
-            "lang": "es",
-            "tags": ["productos", "capsulas", "nespresso", "sostenible"],
-            "category": "productos",
-            "precio_min": 22000,
-            "precio_max": 60000
-        }
-    },
-    {
-        "id": str(uuid.uuid4()),
-        "text": "Chocolate artesanal Que Rico: Tableta de chocolate 70% cacao con granos de café molido. Elaborado en Santander. Peso 100g ($15.000). Ideal para acompañar café. Ingredientes: cacao, azúcar, manteca de cacao y café molido.",
-        "payload": {
-            "title": "Chocolate artesanal Que Rico",
-            "source": "catalog",
-            "lang": "es",
-            "tags": ["productos", "chocolate", "artesanal", "santander"],
-            "category": "productos",
-            "precio_min": 15000,
-            "precio_max": 15000
-        }
-    },
+         "id": str(uuid.uuid4()),
+        "text": """📖 Catálogo Completo Café:
 
+    🌟 LÍNEA PREMIUM SINGLE-ORIGIN:
+    • ☕ Café Premium Huila: 250g $38.000 / 500g $70.000
+    Tueste medio-claro, sabor frutal con notas cítricas y frutas rojas. Altitud 1600-1800 msnm.
+    
+    • 🌿 Café Nariño Orgánico (Certificado): 250g $42.000 / 500g $78.000
+    Tueste claro, notas florales y miel. Proceso natural sin químicos.
+    
+    • 💪 Café Tolima Intenso: 250g $35.000 / 500g $65.000
+    Tueste oscuro, ideal para espresso. Chocolate amargo y frutos secos.
+    
+    • 🌴 Café Sierra Nevada: 250g $36.000 / 500g $67.000
+    Tueste medio, sabor dulce con panela y frutas tropicales.
 
-    # ==================== PRECIOS Y PRESENTACIONES ====================
-    {
-        "id": str(uuid.uuid4()),
-        "text": "Lista de precios Café Que Rico: Clásico 250g $25.000 / 500g $45.000 | Premium Huila 250g $38.000 / 500g $70.000 | Nariño Orgánico 250g $42.000 / 500g $78.000 | Tolima Intenso 250g $35.000 / 500g $65.000 | Descafeinado 250g $30.000 / 500g $55.000 | Edición Especial 250g $95.000. Todos los precios en pesos colombianos (COP).",
-        "payload": {
-            "title": "Lista completa de precios",
-            "source": "pricing",
-            "lang": "es",
-            "tags": ["precios", "lista", "costos"],
-            "category": "precios"
-        }
-    },
-    {
-        "id": str(uuid.uuid4()),
-        "text": "Tipos de molido disponibles: FINO (para espresso, cafetera italiana), MEDIO (para cafetera de goteo, V60), GRUESO (para prensa francesa, cold brew). El café viene en grano entero por defecto. Sin cargo adicional por moler.",
-        "payload": {
-            "title": "Tipos de molido",
-            "source": "info",
-            "lang": "es",
-            "tags": ["molido", "preparacion", "granos"],
-            "category": "productos"
-        }
-    },
-        {
-        "id": str(uuid.uuid4()),
-        "text": """Catálogo completo Café Que Rico (2025):
+    🏡 LÍNEA CLÁSICA:
+    • ☕ Café Clásico: 250g $25.000 / 500g $45.000
+    Blend suave 100% arábica. Notas de chocolate, caramelo y nuez.
+    
+    • 🌰 Café Antioquia Reserva Familiar: 250g $33.000 / 500g $60.000
+    Blend de pequeños productores. Cacao, azúcar morena y nueces tostadas.
+    
+    • 😴 Café Descafeinado: 250g $30.000 / 500g $55.000
+    Proceso suizo sin químicos. Conserva 98% del sabor original.
 
-☕ Café Que Rico Clásico — 250g $25.000 / 500g $45.000
-☕ Café Premium Huila — 250g $38.000 / 500g $70.000
-☕ Café Nariño Orgánico — 250g $42.000 / 500g $78.000
-☕ Café Tolima Intenso — 250g $35.000 / 500g $65.000
-☕ Café Sierra Nevada — 250g $36.000 / 500g $67.000
-☕ Café Antioquia Reserva Familiar — 250g $33.000 / 500g $60.000
-☕ Café Descafeinado — 250g $30.000 / 500g $55.000
-☕ Café Edición Especial — 250g $95.000 (micro-lote)
-🥶 Café Frío Listo (Cold Brew) — 350ml $12.000 / 1L $30.000
-🎯 Cápsulas compatibles Nespresso — 10 cápsulas $22.000 / 30 cápsulas $60.000
-🍫 Chocolate artesanal Que Rico — 100g $15.000
+    💎 EDICIÓN LIMITADA:
+    • ✨ Café Edición Especial: 250g $95.000
+    Micro-lote mensual, solo 50 bolsas. Incluye ficha de cata.
 
-📦 Todos disponibles en grano o molido (fino, medio, grueso según preparación).
-💬 Precios en pesos colombianos (COP).""",
-        "payload": {
-            "title": "Catálogo completo 2025",
-            "source": "catalog",
-            "lang": "es",
-            "tags": ["catalogo", "productos", "lista", "precios"],
-            "category": "productos"
-        }
-    },
+    🧊 FORMATO LISTO PARA TOMAR:
+    • 🧋 Cold Brew (Café Frío): 350ml $12.000 / 1L $30.000
+    100% natural sin azúcar. Elaborado con café Huila.
+    
+    • ♻️ Cápsulas Nespresso: 10 unidades $22.000 / 30 unidades $60.000
+    Compatibles, compostables y biodegradables.
 
+    🍫 COMPLEMENTOS:
+    • 🍫 Chocolate Artesanal: 100g $15.000
+    70% cacao con granos de café molido. Hecho en Santander.
 
-    # ==================== PROMOCIONES Y DESCUENTOS ====================
-    {
-        "id": str(uuid.uuid4()),
-        "text": "Promoción 3x2: Compra 3 bolsas de cualquier café (pueden ser diferentes) y paga solo 2. La de menor valor es gratis. Válido todos los días. No acumulable con otros descuentos.",
-        "payload": {
-            "title": "Promoción 3x2",
-            "source": "promotions",
-            "lang": "es",
-            "tags": ["promociones", "descuentos", "3x2", "oferta"],
-            "category": "promociones"
-        }
+    📦 Todos los cafés disponibles en grano entero o molido (fino, medio, grueso).""",
+            "payload": {
+                "title": "Información de catalogo",
+                "source": "catalog",
+                "lang": "es",
+                "tags": ["catalogo", "contacto", "whatsapp",  "telefono", "direccion"],
+                "category": "contacto"
+            }
     },
     {
         "id": str(uuid.uuid4()),
-        "text": "Descuento por volumen: 10% de descuento en compras superiores a $150.000 COP. 15% de descuento en compras superiores a $300.000 COP. Ideal para oficinas o grupos.",
+        "text": "🕒 Horarios de atención Café Que Rico: Tienda física: lunes a viernes de 9:00 AM a 7:00 PM, sábados de 10:00 AM a 5:00 PM, domingos cerrado. 💬 Atención virtual con IZA (asistente automático): 24/7. 📞 Atención humana por WhatsApp y teléfono: lunes a viernes de 8:00 AM a 6:00 PM, sábados de 9:00 AM a 1:00 PM.",
         "payload": {
-            "title": "Descuentos por volumen",
-            "source": "promotions",
-            "lang": "es",
-            "tags": ["promociones", "descuentos", "volumen", "mayoreo"],
-            "category": "promociones"
-        }
-    },
-    {
-        "id": str(uuid.uuid4()),
-        "text": "Combo Cafetero: 1 bolsa de Clásico 500g + 1 bolsa de Premium Huila 250g + 1 prensa francesa = $95.000 (ahorro de $18.000). Perfecto para regalo o comenzar en el mundo del café de especialidad.",
-        "payload": {
-            "title": "Combo Cafetero",
-            "source": "promotions",
-            "lang": "es",
-            "tags": ["promociones", "combo", "paquete", "regalo"],
-            "category": "promociones"
-        }
-    },
-    {
-        "id": str(uuid.uuid4()),
-        "text": "Programa de fidelidad: Por cada $100.000 en compras acumulas 1 punto. 5 puntos = 1 bolsa de café Clásico 250g gratis. 10 puntos = 1 bolsa Premium de tu elección gratis. Los puntos no expiran.",
-        "payload": {
-            "title": "Programa de fidelidad",
-            "source": "promotions",
-            "lang": "es",
-            "tags": ["fidelidad", "puntos", "recompensas", "lealtad"],
-            "category": "promociones"
-        }
-    },
-    {
-        "id": str(uuid.uuid4()),
-        "text": "Descuento del mes de octubre 2025: 20% de descuento en toda la línea orgánica Nariño. Código: OCTUBRE20. Válido hasta el 31 de octubre.",
-        "payload": {
-            "title": "Descuento octubre 2025",
-            "source": "promotions",
-            "lang": "es",
-            "tags": ["promociones", "descuento-mes", "octubre", "organico"],
-            "category": "promociones"
-        }
-    },
-
-    # ==================== ENVÍOS Y ENTREGA ====================
-    {
-        "id": str(uuid.uuid4()),
-        "text": "Envíos en Bucaramanga y área metropolitana (Floridablanca, Girón, Piedecuesta): Entrega en 24-48 horas. Costo: $8.000 COP. GRATIS en pedidos superiores a $80.000 COP.",
-        "payload": {
-            "title": "Envíos Bucaramanga",
-            "source": "shipping",
-            "lang": "es",
-            "tags": ["envios", "bucaramanga", "local", "rapido"],
-            "category": "envios"
-        }
-    },
-    {
-        "id": str(uuid.uuid4()),
-        "text": "Envíos nacionales Colombia: Cobertura en todas las ciudades principales (Bogotá, Medellín, Cali, Barranquilla, Cartagena, etc). Tiempo de entrega: 3-5 días hábiles. Costo: $15.000 COP. GRATIS en pedidos superiores a $120.000 COP. Usamos Servientrega y Coordinadora.",
-        "payload": {
-            "title": "Envíos nacionales",
-            "source": "shipping",
-            "lang": "es",
-            "tags": ["envios", "nacional", "colombia", "servientrega"],
-            "category": "envios"
-        }
-    },
-    {
-        "id": str(uuid.uuid4()),
-        "text": "Recogida en tienda: Disponible sin costo en nuestra tienda ubicada en Calle 35 #15-20, Cabecera del Llano, Bucaramanga. Horario: Lunes a viernes 9:00 AM - 7:00 PM, sábados 10:00 AM - 5:00 PM. Pedido listo en 2-4 horas.",
-        "payload": {
-            "title": "Recogida en tienda",
-            "source": "shipping",
-            "lang": "es",
-            "tags": ["recogida", "tienda-fisica", "bucaramanga", "cabecera"],
-            "category": "envios"
-        }
-    },
-    {
-        "id": str(uuid.uuid4()),
-        "text": "Seguimiento de pedido: Recibirás número de guía por WhatsApp o email 24 horas después del despacho. Puedes rastrear tu pedido en tiempo real en la página de la transportadora.",
-        "payload": {
-            "title": "Rastreo de pedidos",
-            "source": "shipping",
-            "lang": "es",
-            "tags": ["envios", "rastreo", "seguimiento", "guia"],
-            "category": "envios"
-        }
-    },
-
-    # ==================== MÉTODOS DE PAGO ====================
-    {
-        "id": str(uuid.uuid4()),
-        "text": "Métodos de pago aceptados: Transferencia bancaria (Bancolombia, Davivienda, Nequi), Daviplata, Nequi, Tarjetas de crédito/débito (Visa, Mastercard, American Express), PSE, Efectivo (solo en recogida en tienda), Wompi (pasarela segura).",
-        "payload": {
-            "title": "Métodos de pago",
-            "source": "payment",
-            "lang": "es",
-            "tags": ["pagos", "metodos", "transferencia", "tarjetas"],
-            "category": "pagos"
-        }
-    },
-    {
-        "id": str(uuid.uuid4()),
-        "text": "Pago contra entrega: Disponible solo en Bucaramanga y área metropolitana. Recargo de $3.000 COP. Puedes pagar en efectivo o con datáfono al momento de recibir tu pedido.",
-        "payload": {
-            "title": "Pago contra entrega",
-            "source": "payment",
-            "lang": "es",
-            "tags": ["pagos", "contraentrega", "efectivo", "datafono"],
-            "category": "pagos"
-        }
-    },
-    {
-        "id": str(uuid.uuid4()),
-        "text": "Datos bancarios para transferencia: Banco Bancolombia, Cuenta de ahorros #12345678901, Titular: Café Que Rico SAS, NIT: 900.123.456-7. Enviar comprobante por WhatsApp al 300-123-4567.",
-        "payload": {
-            "title": "Datos bancarios",
-            "source": "payment",
-            "lang": "es",
-            "tags": ["pagos", "transferencia", "bancolombia", "datos"],
-            "category": "pagos"
-        }
-    },
-    {
-        "id": str(uuid.uuid4()),
-        "text": "Pago seguro con tarjeta: Procesamos pagos con Wompi, certificado PCI DSS. No almacenamos datos de tu tarjeta. Transacciones 100% seguras con verificación 3D Secure.",
-        "payload": {
-            "title": "Seguridad en pagos",
-            "source": "payment",
-            "lang": "es",
-            "tags": ["pagos", "seguridad", "wompi", "tarjetas"],
-            "category": "pagos"
-        }
-    },
-    {
-        "id": str(uuid.uuid4()),
-        "text": "Cuotas sin interés: Pagos con tarjeta de crédito aceptan cuotas sin interés: 3 cuotas en compras superiores a $90.000, 6 cuotas en compras superiores a $180.000. Aplica con bancos participantes.",
-        "payload": {
-            "title": "Cuotas sin interés",
-            "source": "payment",
-            "lang": "es",
-            "tags": ["pagos", "cuotas", "credito", "sin-interes"],
-            "category": "pagos"
-        }
-    },
-
-    # ==================== PROCESO DE COMPRA ====================
-    {
-        "id": str(uuid.uuid4()),
-        "text": "Cómo hacer tu pedido: 1) Dime qué café quieres y la cantidad. 2) Elige el tipo de molido (o grano entero). 3) Confirma tu dirección de entrega. 4) Selecciona método de pago. 5) Te envío resumen y total. 6) Realizas el pago. 7) Confirmamos y despachamos. Simple y rápido.",
-        "payload": {
-            "title": "Proceso de compra",
-            "source": "sales",
-            "lang": "es",
-            "tags": ["compra", "pedido", "proceso", "pasos"],
-            "category": "ventas"
-        }
-    },
-    {
-        "id": str(uuid.uuid4()),
-        "text": "Canales de venta: Puedes comprar por WhatsApp (300-123-4567), página web (www.cafequerico.co), Instagram (@cafequerico), o hablando directamente conmigo, IZA, tu asistente virtual. Atención 24/7.",
-        "payload": {
-            "title": "Canales de venta",
-            "source": "sales",
-            "lang": "es",
-            "tags": ["ventas", "canales", "whatsapp", "web"],
-            "category": "ventas"
-        }
-    },
-    {
-        "id": str(uuid.uuid4()),
-        "text": "Tiempo de procesamiento: Pedidos recibidos antes de las 2:00 PM se despachan el mismo día. Pedidos después de las 2:00 PM se despachan al día siguiente hábil. No despachamos domingos ni festivos.",
-        "payload": {
-            "title": "Tiempo de procesamiento",
-            "source": "sales",
-            "lang": "es",
-            "tags": ["ventas", "procesamiento", "despacho", "tiempos"],
-            "category": "ventas"
-        }
-    },
-
-    # ==================== GARANTÍAS Y DEVOLUCIONES ====================
-    {
-        "id": str(uuid.uuid4()),
-        "text": "Garantía de frescura: Todo nuestro café se tuesta máximo 7 días antes del envío. Garantizamos frescura por 3 meses desde la fecha de tueste (indicada en el empaque). Si no estás satisfecho con la frescura, cambio o reembolso 100%.",
-        "payload": {
-            "title": "Garantía de frescura",
-            "source": "policy",
-            "lang": "es",
-            "tags": ["garantia", "frescura", "calidad", "tueste"],
-            "category": "garantias"
-        }
-    },
-    {
-        "id": str(uuid.uuid4()),
-        "text": "Política de devolución: Tienes 7 días desde la recepción para devolver el producto si no quedaste satisfecho. Reembolso 100% o cambio por otro café. El café debe estar en empaque original sin abrir. Costo de envío de devolución corre por cuenta del cliente.",
-        "payload": {
-            "title": "Política de devolución",
-            "source": "policy",
-            "lang": "es",
-            "tags": ["devolucion", "reembolso", "garantia", "7dias"],
-            "category": "garantias"
-        }
-    },
-    {
-        "id": str(uuid.uuid4()),
-        "text": "Producto dañado o equivocado: Si recibes producto dañado o equivocado, contacta inmediatamente. Reposición sin costo y nosotros cubrimos el envío. Toma fotos del empaque y producto como evidencia.",
-        "payload": {
-            "title": "Producto dañado",
-            "source": "policy",
-            "lang": "es",
-            "tags": ["garantia", "dañado", "reposicion", "error"],
-            "category": "garantias"
-        }
-    },
-
-    # ==================== INFORMACIÓN DE CONTACTO ====================
-    {
-        "id": str(uuid.uuid4()),
-        "text": "Contacto Café Que Rico: WhatsApp ventas: 300-123-4567 | Email: ventas@cafequerico.co | Soporte: soporte@cafequerico.co | Teléfono fijo: (7) 123-4567 | Dirección tienda: Calle 35 #15-20, Cabecera del Llano, Bucaramanga | Instagram: @cafequerico | Facebook: Café Que Rico",
-        "payload": {
-            "title": "Información de contacto",
-            "source": "contact",
-            "lang": "es",
-            "tags": ["contacto", "whatsapp", "email", "telefono"],
-            "category": "contacto"
-        }
-    },
-    {
-        "id": str(uuid.uuid4()),
-        "text": "Horarios de atención: Tienda física: Lunes a viernes 9:00 AM - 7:00 PM, sábados 10:00 AM - 5:00 PM, domingos cerrado | Atención WhatsApp y web: 24/7 con IZA (respuestas inmediatas) | Atención humana: Lunes a viernes 8:00 AM - 6:00 PM, sábados 9:00 AM - 1:00 PM",
-        "payload": {
-            "title": "Horarios de atención",
+            "title": "Horarios de Atención",
             "source": "contact",
             "lang": "es",
             "tags": ["horarios", "atencion", "disponibilidad"],
@@ -464,12 +76,12 @@ KB_DOCUMENTS = [
         }
     },
 
-    # ==================== PREPARACIÓN Y CONSEJOS ====================
+    # ==================== 🧠 PREPARACIÓN Y CONSEJOS ====================
     {
         "id": str(uuid.uuid4()),
-        "text": "Consejos de preparación: Prensa francesa: 30g café molido grueso por 500ml agua a 92-96°C, infusión 4 minutos | V60: 15g café molido medio por 250ml agua a 90-94°C, tiempo total 2:30-3:00 min | Espresso: 18-20g café molido fino, extracción 25-30 segundos, 40ml salida",
+        "text": "📋 Guía de preparación de café: ☕ PRENSA FRANCESA: 30g de café molido grueso por cada 500ml de agua a 92-96°C, ⏳ tiempo de infusión 4 minutos. 🔹 V60 O CHEMEX: 15g de café molido medio por cada 250ml de agua a 90-94°C, tiempo total de preparación 2:30 a 3:00 minutos. ⚡ ESPRESSO: 18-20g de café molido fino, extracción 25-30 segundos. 💧 CAFETERA DE GOTEO: 60g de café molido medio por litro de agua.",
         "payload": {
-            "title": "Guía de preparación",
+            "title": "Guía de Preparación",
             "source": "info",
             "lang": "es",
             "tags": ["preparacion", "metodos", "recetas", "barista"],
@@ -478,67 +90,457 @@ KB_DOCUMENTS = [
     },
     {
         "id": str(uuid.uuid4()),
-        "text": "Conservación del café: Guardar en lugar fresco y seco, lejos de luz directa y olores fuertes. Usar recipiente hermético. No refrigerar ni congelar. Consumir preferiblemente dentro de 1 mes después de abrir el empaque para sabor óptimo.",
+        "text": "🧺 Consejos de conservación del café: Guarda el café en un lugar fresco 🌬️ y seco, alejado de la luz ☀️ y olores fuertes. Usa un recipiente hermético 🔒. ❌ No refrigeres ni congeles. Consume dentro del primer mes para mejor sabor.",
         "payload": {
-            "title": "Conservación del café",
+            "title": "Conservación del Café",
             "source": "info",
             "lang": "es",
-            "tags": ["conservacion", "almacenamiento", "frescura"],
+            "tags": ["conservacion", "almacenamiento", "frescura", "cuidados"],
+            "category": "educacion"
+        }
+    },
+    {
+        "id": str(uuid.uuid4()),
+        "text": "🍰 Recomendaciones de maridaje: El Café Clásico combina bien con pan dulce 🍩 y postres de chocolate 🍫. El Premium Huila es ideal con frutas frescas 🍓. El Tolima Intenso acompaña chocolate amargo 🍪. El Nariño Orgánico va perfecto con miel 🍯. Nuestro chocolate artesanal es el maridaje ideal para cualquier café ☕.",
+        "payload": {
+            "title": "Maridaje con Café",
+            "source": "info",
+            "lang": "es",
+            "tags": ["maridaje", "acompañamiento", "postres"],
             "category": "educacion"
         }
     },
 
-    # ==================== PREGUNTAS FRECUENTES ====================
+    # ==================== ❓ PREGUNTAS FRECUENTES ====================
     {
         "id": str(uuid.uuid4()),
-        "text": "¿Hacen envíos internacionales? Actualmente solo enviamos dentro de Colombia. Estamos trabajando en expandir a países de Latinoamérica próximamente.",
+        "text": "🌍 ¿Hacen envíos internacionales? Actualmente Café Que Rico solo realiza envíos dentro de 🇨🇴 Colombia. Estamos trabajando para expandirnos a Latinoamérica 🌎 próximamente.",
         "payload": {
-            "title": "Envíos internacionales",
+            "title": "Envíos Internacionales",
             "source": "faq",
             "lang": "es",
-            "tags": ["faq", "internacional", "envios"],
+            "tags": ["faq", "internacional", "envios", "exterior"],
             "category": "faq"
         }
     },
     {
         "id": str(uuid.uuid4()),
-        "text": "¿Puedo cambiar o cancelar mi pedido? Sí, puedes cambiar o cancelar sin costo antes de que se despache. Una vez despachado, aplica política de devolución estándar.",
+        "text": "♻️ ¿Puedo cambiar o cancelar mi pedido? Sí, siempre que no haya sido despachado 📦. Si ya fue enviado, aplica nuestra política de devolución estándar de 7 días 📅. Contáctanos por WhatsApp 📱 o teléfono.",
         "payload": {
-            "title": "Cambios y cancelaciones",
+            "title": "Cambios y Cancelaciones",
             "source": "faq",
             "lang": "es",
-            "tags": ["faq", "cancelacion", "cambios"],
+            "tags": ["faq", "cancelacion", "cambios", "modificar"],
             "category": "faq"
         }
     },
     {
         "id": str(uuid.uuid4()),
-        "text": "¿El café es de comercio justo? Sí, trabajamos directamente con cooperativas de caficultores colombianos, pagando precio justo y premium por calidad. Parte de nuestras ganancias va al desarrollo de las comunidades cafeteras.",
+        "text": "🤝 ¿El café de Que Rico es de comercio justo? ¡Sí! Trabajamos con pequeños productores 👩‍🌾👨‍🌾, pagando precio justo 💰 y apoyando educación y desarrollo local 📚🏡.",
         "payload": {
-            "title": "Comercio justo",
+            "title": "Comercio Justo",
             "source": "faq",
             "lang": "es",
-            "tags": ["faq", "comercio-justo", "etico", "social"],
+            "tags": ["faq", "comercio-justo", "etico", "social", "sostenible"],
             "category": "faq"
         }
     },
     {
         "id": str(uuid.uuid4()),
-        "text": "¿Tienen suscripción mensual? Sí, plan de suscripción: recibe café fresco cada mes con 15% de descuento. Elige frecuencia (quincenal/mensual), tipo de café y cantidad. Cancela cuando quieras. Envío gratis en suscripciones.",
+        "text": "🕰️ ¿Cuánto tiempo dura el café después de abierto? Mantiene su mejor sabor durante 1 mes si lo guardas correctamente 🔒. Después puede perder aroma, pero sigue siendo consumible ☕.",
         "payload": {
-            "title": "Suscripción mensual",
+            "title": "Duración del Café",
             "source": "faq",
             "lang": "es",
-            "tags": ["faq", "suscripcion", "mensual", "recurrente"],
+            "tags": ["faq", "duracion", "caducidad", "frescura"],
             "category": "faq"
         }
-    }
+    },
+    {
+        "id": str(uuid.uuid4()),
+        "text": "👋 ¿Qué café me recomiendan si soy principiante? Prueba el Café Clásico o el Sierra Nevada 🌄. Son suaves y equilibrados. También puedes probar el Combo Cafetero 🎁 con prensa francesa y guía de preparación.",
+        "payload": {
+            "title": "Recomendación para Principiantes",
+            "source": "faq",
+            "lang": "es",
+            "tags": ["faq", "principiante", "recomendacion", "basico"],
+            "category": "faq"
+        }
+    },
+    {
+        "id": str(uuid.uuid4()),
+        "text": "¿Ofrecen café para empresas u oficinas? Sí, ofrecemos servicio especial para empresas y oficinas con descuentos por volumen (10% en compras sobre $150.000 y 15% sobre $300.000). Podemos crear planes personalizados de suministro mensual con facturación y entrega programada. Contacta a nuestro equipo comercial para más información y cotizaciones especiales.",
+        "payload": {
+            "title": "Café para Empresas",
+            "source": "faq",
+            "lang": "es",
+            "tags": ["faq", "empresas", "oficinas", "corporativo", "volumen"],
+            "category": "faq"
+        }
+    },
+    {
+        "id": str(uuid.uuid4()),
+        "text": "¿Tienen café en grano para máquinas superautomáticas? Sí, todos nuestros cafés están disponibles en grano entero, perfectos para máquinas superautomáticas. Te recomendamos especialmente el Café Clásico o el Tolima Intenso si prefieres espressos más robustos. El grano entero mantiene mejor la frescura y las máquinas superautomáticas muelen justo antes de preparar, garantizando el mejor sabor.",
+        "payload": {
+            "title": "Café para Máquinas Automáticas",
+            "source": "faq",
+            "lang": "es",
+            "tags": ["faq", "maquinas", "automaticas", "grano"],
+            "category": "faq"
+        }
+    },
+    # ==================== PRODUCTOS INDIVIDUALES DETALLADOS ====================
+    {
+        "id": str(uuid.uuid4()),
+        "text": "Café Clásico Que Rico: Blend suave 100% arábica colombiano con tueste medio. Perfil de sabor equilibrado con notas de chocolate, caramelo y nuez. Ideal para prensa francesa o cafetera de filtro. Cuerpo medio y acidez suave. Precio: 250g $25.000 / 500g $45.000. Disponible en grano entero, molido fino, medio o grueso.",
+        "payload": {
+            "title": "Café Clásico",
+            "source": "products",
+            "lang": "es",
+            "tags": ["clasico", "blend", "chocolate", "tueste-medio"],
+            "category": "productos",
+            "precio_min": 25000,
+            "precio_max": 45000
+        }
+    },
+    {
+        "id": str(uuid.uuid4()),
+        "text": "Café Premium Huila Que Rico: Single-origin de la región de Huila, Colombia. Tueste medio-claro para resaltar sus cualidades. Perfil frutal con notas de cítricos, frutas rojas y acidez brillante. Cuerpo medio. Cultivado entre 1600-1800 msnm, proceso lavado. Precio: 250g $38.000 / 500g $70.000. Disponible en grano entero o molido medio.",
+        "payload": {
+            "title": "Café Premium Huila",
+            "source": "products",
+            "lang": "es",
+            "tags": ["huila", "premium", "frutal", "single-origin"],
+            "category": "productos",
+            "precio_min": 38000,
+            "precio_max": 70000
+        }
+    },
+    {
+        "id": str(uuid.uuid4()),
+        "text": "Café Nariño Orgánico Que Rico: Certificado orgánico internacional. Single-origin de Nariño con tueste claro. Perfil delicado con notas florales, miel y cítricos dulces. Proceso natural sin químicos ni pesticidas. Ideal para métodos de preparación suaves. Precio: 250g $42.000 / 500g $78.000. Disponible en grano entero, molido fino o medio.",
+        "payload": {
+            "title": "Café Nariño Orgánico",
+            "source": "products",
+            "lang": "es",
+            "tags": ["narino", "organico", "certificado", "flores"],
+            "category": "productos",
+            "precio_min": 42000,
+            "precio_max": 78000
+        }
+    },
+    {
+        "id": str(uuid.uuid4()),
+        "text": "Café Tolima Intenso Que Rico: Single-origin de Tolima con tueste oscuro. Perfil robusto con notas de chocolate amargo y frutos secos. Cuerpo fuerte, ideal para espresso y métodos de presión. Excelente crema y persistencia. Precio: 250g $35.000 / 500g $65.000. Disponible en grano entero o molido fino para espresso.",
+        "payload": {
+            "title": "Café Tolima Intenso",
+            "source": "products",
+            "lang": "es",
+            "tags": ["tolima", "intenso", "espresso", "chocolate"],
+            "category": "productos",
+            "precio_min": 35000,
+            "precio_max": 65000
+        }
+    },
+    {
+        "id": str(uuid.uuid4()),
+        "text": "Café Sierra Nevada Que Rico: Origen Sierra Nevada de Santa Marta, 100% arábica. Tueste medio que resalta su dulzor natural. Sabor a panela, frutas tropicales y final limpio. Cultivado a 1500 msnm, proceso lavado. Precio: 250g $36.000 / 500g $67.000. Disponible en grano entero o molido medio.",
+        "payload": {
+            "title": "Café Sierra Nevada",
+            "source": "products",
+            "lang": "es",
+            "tags": ["sierra-nevada", "dulce", "panela", "tropical"],
+            "category": "productos",
+            "precio_min": 36000,
+            "precio_max": 67000
+        }
+    },
+    {
+        "id": str(uuid.uuid4()),
+        "text": "Café Antioquia Reserva Familiar Que Rico: Blend especial de pequeños productores de Antioquia. Tueste medio-oscuro. Perfil de cacao, azúcar morena y nueces tostadas. Cuerpo cremoso y persistente. Apoya a familias caficultoras locales. Precio: 250g $33.000 / 500g $60.000. Disponible en grano entero o molido fino.",
+        "payload": {
+            "title": "Café Antioquia Reserva",
+            "source": "products",
+            "lang": "es",
+            "tags": ["antioquia", "blend", "cacao", "cremoso"],
+            "category": "productos",
+            "precio_min": 33000,
+            "precio_max": 60000
+        }
+    },
+    {
+        "id": str(uuid.uuid4()),
+        "text": "Café Descafeinado Que Rico: Proceso suizo de descafeinado sin químicos. Blend suave con tueste medio que conserva 98% del sabor original. Notas de caramelo y avellana. Perfecto para disfrutar en cualquier momento sin afectar el sueño. Precio: 250g $30.000 / 500g $55.000. Solo disponible molido medio.",
+        "payload": {
+            "title": "Café Descafeinado",
+            "source": "products",
+            "lang": "es",
+            "tags": ["descafeinado", "sin-cafeina", "suizo"],
+            "category": "productos",
+            "precio_min": 30000,
+            "precio_max": 55000
+        }
+    },
+    {
+        "id": str(uuid.uuid4()),
+        "text": "Café Edición Especial Que Rico: Micro-lote limitado que cambia mensualmente. Incluye cafés de competencia, variedades geisha y perfiles únicos. Tueste personalizado según el perfil del grano. Solo 50 bolsas por mes. Incluye ficha técnica de cata con información del origen, perfil sensorial y sugerencias de preparación. Precio: 250g $95.000. Solo en grano entero.",
+        "payload": {
+            "title": "Edición Especial Limitada",
+            "source": "products",
+            "lang": "es",
+            "tags": ["especial", "limitado", "geisha", "competencia"],
+            "category": "productos",
+            "precio_min": 95000,
+            "precio_max": 95000
+        }
+    },
+    {
+        "id": str(uuid.uuid4()),
+        "text": "Cold Brew Que Rico (Café Frío Listo): Café frío listo para tomar, 100% natural sin azúcar añadida. Elaborado con café Premium Huila de tueste medio mediante proceso de extracción en frío de 12 horas. Perfil suave con notas de chocolate, frutas y vainilla. Mantener refrigerado. Consumir dentro de 7 días después de abrir. Precio: 350ml $12.000 / 1L $30.000.",
+        "payload": {
+            "title": "Cold Brew",
+            "source": "products",
+            "lang": "es",
+            "tags": ["cold-brew", "frio", "listo", "natural"],
+            "category": "productos",
+            "precio_min": 12000,
+            "precio_max": 30000
+        }
+    },
+    {
+        "id": str(uuid.uuid4()),
+        "text": "Cápsulas Café Que Rico para Nespresso: Cápsulas compatibles con máquinas Nespresso. Mezcla especial de café colombiano tueste medio con notas de chocolate y caramelo. Intensidad media-alta. 100% compostables y biodegradables, amigables con el medio ambiente. Precio: Caja de 10 cápsulas $22.000 / Caja de 30 cápsulas $60.000.",
+        "payload": {
+            "title": "Cápsulas Nespresso",
+            "source": "products",
+            "lang": "es",
+            "tags": ["capsulas", "nespresso", "compostable", "compatible"],
+            "category": "productos",
+            "precio_min": 22000,
+            "precio_max": 60000
+        }
+    },
+    {
+        "id": str(uuid.uuid4()),
+        "text": "Chocolate Artesanal Que Rico: Tableta de chocolate 70% cacao con granos de café molido. Elaboración artesanal en Santander. Ingredientes: cacao, azúcar, manteca de cacao y café molido. Maridaje perfecto para acompañar tu café. Peso: 100g. Precio: $15.000.",
+        "payload": {
+            "title": "Chocolate Artesanal",
+            "source": "products",
+            "lang": "es",
+            "tags": ["chocolate", "artesanal", "cacao", "santander"],
+            "category": "productos",
+            "precio_min": 15000,
+            "precio_max": 15000
+        }
+    },
+
+    # ==================== OPCIONES DE MOLIDO ====================
+    {
+        "id": str(uuid.uuid4()),
+        "text": "Tipos de molido disponibles en Café Que Rico: MOLIDO FINO (ideal para máquinas espresso y cafeteras italianas tipo moka), MOLIDO MEDIO (perfecto para cafeteras de goteo, V60, Chemex y métodos de vertido), MOLIDO GRUESO (recomendado para prensa francesa y cold brew). También disponible en GRANO ENTERO para quienes prefieren moler en casa. El servicio de molido no tiene costo adicional.",
+        "payload": {
+            "title": "Tipos de molido",
+            "source": "info",
+            "lang": "es",
+            "tags": ["molido", "preparacion", "fino", "medio", "grueso"],
+            "category": "productos"
+        }
+    },
+
+    # ==================== PROMOCIONES ====================
+    {
+        "id": str(uuid.uuid4()),
+        "text": "Promoción 3x2 Café Que Rico: Compra 3 bolsas de café de cualquier variedad (pueden ser diferentes) y paga solo 2. La bolsa de menor valor es gratis. Válida todos los días sin excepción. No acumulable con otros descuentos. Aplica para compras en tienda, web y WhatsApp.",
+        "payload": {
+            "title": "Promoción 3x2",
+            "source": "promotions",
+            "lang": "es",
+            "tags": ["3x2", "promocion", "descuento", "oferta"],
+            "category": "promociones"
+        }
+    },
+    {
+        "id": str(uuid.uuid4()),
+        "text": "Descuentos por volumen Café Que Rico: 10% de descuento en compras superiores a $150.000 COP. 15% de descuento en compras superiores a $300.000 COP. Ideal para oficinas, empresas o grupos. Los descuentos se aplican automáticamente al total de la compra. Acumulable con envío gratis pero no con otras promociones.",
+        "payload": {
+            "title": "Descuentos por volumen",
+            "source": "promotions",
+            "lang": "es",
+            "tags": ["descuento", "volumen", "mayoreo", "empresas"],
+            "category": "promociones"
+        }
+    },
+    {
+        "id": str(uuid.uuid4()),
+        "text": "Combo Cafetero Que Rico: Incluye 1 bolsa Café Clásico 500g, 1 bolsa Premium Huila 250g y 1 prensa francesa de vidrio. Todo por $95.000 (ahorro de $18.000 comparado con compra individual). Perfecto para regalar o para quien está empezando en el mundo del café de especialidad. Incluye guía básica de preparación.",
+        "payload": {
+            "title": "Combo Cafetero",
+            "source": "promotions",
+            "lang": "es",
+            "tags": ["combo", "paquete", "regalo", "prensa"],
+            "category": "promociones"
+        }
+    },
+    {
+        "id": str(uuid.uuid4()),
+        "text": "Programa de Fidelidad Café Que Rico: Acumula 1 punto por cada $100.000 en compras. Canjea 5 puntos por 1 bolsa de Café Clásico 250g gratis. Canjea 10 puntos por 1 bolsa Premium de tu elección gratis. Los puntos no expiran nunca. Consulta tu saldo de puntos en cualquier momento por WhatsApp o en tienda.",
+        "payload": {
+            "title": "Programa de Fidelidad",
+            "source": "promotions",
+            "lang": "es",
+            "tags": ["fidelidad", "puntos", "recompensas", "lealtad"],
+            "category": "promociones"
+        }
+    },
+    {
+        "id": str(uuid.uuid4()),
+        "text": "Promoción del mes de octubre 2025: 20% de descuento en toda la línea orgánica (Café Nariño Orgánico en todas sus presentaciones). Usa el código OCTUBRE20 al hacer tu pedido. Válido hasta el 31 de octubre de 2025. Aplica en compras por web, WhatsApp y tienda física.",
+        "payload": {
+            "title": "Promoción Octubre 2025",
+            "source": "promotions",
+            "lang": "es",
+            "tags": ["promocion-mes", "octubre", "organico", "codigo"],
+            "category": "promociones"
+        }
+    },
+    {
+        "id": str(uuid.uuid4()),
+        "text": "Suscripción mensual Café Que Rico: Recibe café fresco cada mes con 15% de descuento permanente. Elige la frecuencia (quincenal o mensual), tipo de café preferido y cantidad. Envío totalmente gratis en todas las entregas. Puedes pausar o cancelar cuando quieras sin penalización. Ideal para no quedarte sin café en casa.",
+        "payload": {
+            "title": "Suscripción Mensual",
+            "source": "promotions",
+            "lang": "es",
+            "tags": ["suscripcion", "mensual", "descuento", "recurrente"],
+            "category": "promociones"
+        }
+    },
+
+     # ==================== 🚚 ENVÍOS ====================
+    {
+        "id": str(uuid.uuid4()),
+        "text": "🚚 Política de envíos Café Que Rico: Realizamos entregas en toda Colombia 🇨🇴. Envíos gratuitos a partir de $100.000 💸. Entregas en 2 a 5 días hábiles 📦. Usamos transportadoras certificadas como Servientrega y Coordinadora. También puedes recoger tu pedido directamente en nuestra tienda física 🏬.",
+        "payload": {
+            "title": "Política de Envíos",
+            "source": "shipping",
+            "lang": "es",
+            "tags": ["envios", "domicilio", "tienda", "servientrega", "plazos"],
+            "category": "envios"
+        }
+    },
+    {
+        "id": str(uuid.uuid4()),
+        "text": "📦 Rastreo de pedido: Una vez despachado tu pedido, recibirás un número de guía 🔢 por correo electrónico 📧 o WhatsApp 📱. Puedes rastrearlo en tiempo real en la página de la transportadora 🚛.",
+        "payload": {
+            "title": "Rastreo de Pedido",
+            "source": "shipping",
+            "lang": "es",
+            "tags": ["rastreo", "envio", "seguimiento", "pedido"],
+            "category": "envios"
+        }
+    },
+    {
+        "id": str(uuid.uuid4()),
+        "text": "📬 Envíos en Bucaramanga y área metropolitana: Entregas el mismo día 🕒 si el pedido se realiza antes de las 2:00 PM. Después de esa hora, se programa para el siguiente día hábil. Entregas por mensajería local en bicicleta 🚴‍♂️ o moto 🛵.",
+        "payload": {
+            "title": "Envíos Locales Bucaramanga",
+            "source": "shipping",
+            "lang": "es",
+            "tags": ["bucaramanga", "envios", "local", "mismo dia"],
+            "category": "envios"
+        }
+    },
+
+    # ==================== 💳 PAGOS ====================
+    {
+        "id": str(uuid.uuid4()),
+        "text": "💳 Métodos de pago disponibles: Aceptamos transferencias bancarias 🏦, PSE 💻, Nequi 📱, Daviplata 💰, tarjetas de crédito 💳 y pagos en efectivo contra entrega 💵 (solo Bucaramanga). Los pagos son procesados de forma segura 🔒.",
+        "payload": {
+            "title": "Métodos de Pago",
+            "source": "payments",
+            "lang": "es",
+            "tags": ["pagos", "pse", "nequi", "daviplata", "efectivo"],
+            "category": "pagos"
+        }
+    },
+    {
+        "id": str(uuid.uuid4()),
+        "text": "🔐 Seguridad en pagos: Todos los pagos se procesan mediante plataformas certificadas y seguras 🔒. No almacenamos datos bancarios 🧾. Puedes confiar plenamente en la seguridad de nuestras transacciones 🛡️.",
+        "payload": {
+            "title": "Seguridad en Pagos",
+            "source": "payments",
+            "lang": "es",
+            "tags": ["seguridad", "pagos", "datos", "confianza"],
+            "category": "pagos"
+        }
+    },
+
+    # ==================== 💸 PROMOCIONES ====================
+    {
+        "id": str(uuid.uuid4()),
+        "text": "🎁 Promociones vigentes Café Que Rico: 💥 Combo Cafetero: prensa francesa + 250g de café clásico $55.000. ☕ Llévate 3 bolsas de 250g y paga solo 2. 🌿 Envío gratis en compras superiores a $100.000. 🧊 10% de descuento en Cold Brew por lanzamiento.",
+        "payload": {
+            "title": "Promociones Vigentes",
+            "source": "promos",
+            "lang": "es",
+            "tags": ["promociones", "descuento", "combo", "envio gratis"],
+            "category": "promociones"
+        }
+    },
+    {
+        "id": str(uuid.uuid4()),
+        "text": "🎉 Programa de fidelidad: Cada compra suma puntos ☕. Por cada $10.000 acumulas 1 punto ⭐. Con 10 puntos obtienes un 15% de descuento en tu siguiente compra. Puedes consultar tus puntos desde tu cuenta 💻 o escribiendo a WhatsApp 📱.",
+        "payload": {
+            "title": "Programa de Fidelidad",
+            "source": "promos",
+            "lang": "es",
+            "tags": ["fidelidad", "puntos", "beneficios", "descuento"],
+            "category": "promociones"
+        }
+    },
+
+    # ==================== 🧾 POLÍTICAS ====================
+    {
+        "id": str(uuid.uuid4()),
+        "text": "📜 Política de devoluciones: Aceptamos devoluciones dentro de los 7 días posteriores a la entrega 🗓️ si el producto presenta defectos o errores en el pedido. El café abierto o consumido no aplica para devolución 🚫. Para iniciar el proceso, comunícate con soporte técnico 💬.",
+        "payload": {
+            "title": "Política de Devoluciones",
+            "source": "policy",
+            "lang": "es",
+            "tags": ["devoluciones", "reembolso", "politica", "pedido"],
+            "category": "politicas"
+        }
+    },
+    {
+        "id": str(uuid.uuid4()),
+        "text": "🔒 Política de privacidad: Café Que Rico protege tus datos personales 🛡️. No compartimos información con terceros y cumplimos con la Ley 1581 de 2012 sobre protección de datos personales en Colombia 📘.",
+        "payload": {
+            "title": "Política de Privacidad",
+            "source": "policy",
+            "lang": "es",
+            "tags": ["privacidad", "datos", "seguridad", "colombia"],
+            "category": "politicas"
+        }
+    },
+
+    # ==================== 📱 CONTACTO ====================
+    {
+        "id": str(uuid.uuid4()),
+        "text": "📞 Contacto Café Que Rico: WhatsApp: +57 316 555 9087 📱 | Teléfono: (607) 635 4488 ☎️ | Email: contacto@caferico.co ✉️ | Dirección: Calle 36 #23-45, Bucaramanga 🏬 | Instagram: @cafericocol ☕.",
+        "payload": {
+            "title": "Información de Contacto",
+            "source": "contact",
+            "lang": "es",
+            "tags": ["contacto", "whatsapp", "telefono", "direccion", "instagram"],
+            "category": "contacto"
+        }
+    },
 ]
+
 
 async def load_knowledge_base():
     """Carga la base de conocimiento en Qdrant"""
     try:
-        logger.info("Iniciando carga de base de conocimiento...")
+        logger.info("Iniciando carga de base de conocimiento optimizada...")
         
         ensure_collection()
         
@@ -555,28 +557,33 @@ async def load_knowledge_base():
             documents.append(doc)
         
         batch_size = 10
+        total_batches = (len(documents) - 1) // batch_size + 1
+        
         for i in range(0, len(documents), batch_size):
             batch = documents[i:i + batch_size]
-            logger.info(f"Cargando lote {i//batch_size + 1}/{(len(documents)-1)//batch_size + 1}")
+            batch_num = i // batch_size + 1
+            logger.info(f"Cargando lote {batch_num}/{total_batches} ({len(batch)} documentos)")
             await upsert_documents(batch)
         
         info_after = get_collection_info()
         logger.info(f"Info de colección después de cargar: {info_after}")
         
-        logger.info(f"Base de conocimiento cargada exitosamente!")
-        logger.info(f"   - {len(documents)} documentos cargados")
-        logger.info(f"   - Colección: {info_after.get('name', 'N/A')}")
-        logger.info(f"   - Total puntos: {info_after.get('points_count', 'N/A')}")
+        logger.info(f"✅ Base de conocimiento cargada exitosamente!")
+        logger.info(f"   📦 Total documentos: {len(documents)}")
+        logger.info(f"   🗂️  Colección: {info_after.get('name', 'N/A')}")
+        logger.info(f"   📊 Puntos en Qdrant: {info_after.get('points_count', 'N/A')}")
         
     except Exception as e:
-        logger.exception(f"Error cargando base de conocimiento: {e}")
+        logger.exception(f"❌ Error cargando base de conocimiento: {e}")
         raise
 
 async def main():
     """Función principal"""
-    logger.info("Script de carga de KB iniciando...")
+    logger.info("🚀 Script de carga de KB iniciando...")
     await load_knowledge_base()
-    logger.info("Script completado exitosamente!")
+    logger.info("🎉 Script completado exitosamente!")
 
 if __name__ == "__main__":
     asyncio.run(main())
+
+    

@@ -50,7 +50,7 @@ async def process_whatsapp_message(payload: Dict[str, Any]) -> str:
             chat_id=0,
             role="user",
             text=text,
-            channel="whatsapp"
+            channel="web"
         )
         logger.debug(f"📡 Mensaje de usuario notificado via WebSocket")
 
@@ -58,7 +58,7 @@ async def process_whatsapp_message(payload: Dict[str, Any]) -> str:
         reply_text = await get_agent_response(
             user_id=from_number,
             user_message=text,
-            channel="whatsapp"
+            channel="web"
         )
 
         # Enviar respuesta por WhatsApp
@@ -70,7 +70,7 @@ async def process_whatsapp_message(payload: Dict[str, Any]) -> str:
             chat_id=0,
             role="assistant",
             text=reply_text,
-            channel="whatsapp"
+            channel="web"
         )
         logger.debug(f"📡 Respuesta del asistente notificada via WebSocket")
 

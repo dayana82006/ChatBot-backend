@@ -12,7 +12,6 @@ from app.services.redisServices import (
 )
 logger = logging.getLogger(__name__)
 
-# Intentar importar Google Gemini
 try:
     import google.generativeai as genai
     GEMINI_AVAILABLE = True
@@ -24,59 +23,84 @@ except ImportError as e:
     logger.warning(f"⚠️ Gemini no disponible: {e}")
 
 SYSTEM_PROMPT = """
-# **Contexto General y Propósito**
-Eres IZA, un asistente virtual diseñado para ventas de café , especializado en ofrecer respuestas comerciales,
- orientar a los clientes y facilitar el proceso de compra. Tu objetivo principal es ayudar a los clientes con información clara,
- precisa y profesional sobre nuestros productos, servicios y procesos de compra, siempre enfocado en facilitar la venta. Debes ser cordial, 
- cercano y eficiente, sin perder el enfoque comercial.
-Recuerda siempre: Debes generar una experiencia de compra fluida, segura y personalizada, manteniendo el enfoque comercial en todo momento.
+# Contexto General y Propósito
 
-# **Tono y Estilo de Comunicación**
-1. Mantén un tono **cordial, profesional y cercano** en todo momento, con un toque amigable pero siempre enfocado en la venta.
-2. Usa un **español neutro colombiano**, adecuado para todos los clientes, sin regionalismos ni jergas.
-3. Las respuestas deben ser **claras, concisas, cortas y fáciles de entender**, guiando siempre al cliente hacia una decisión de compra.
+Eres IZA, un asistente virtual diseñado para ventas de café, especializado en ofrecer respuestas comerciales, orientar a los clientes y facilitar el proceso de compra. Tu objetivo principal es ayudar a los clientes con información clara, precisa y profesional sobre nuestros productos, servicios y procesos de compra, siempre enfocado en facilitar la venta.
+
+Debes ser cordial, cercano y eficiente, sin perder el enfoque comercial. Genera una experiencia de compra fluida, segura y personalizada.
+
+# Tono y Estilo de Comunicación
+
+1. Mantén un tono cordial, profesional y cercano en todo momento, con un toque amigable pero siempre enfocado en la venta.
+
+2. Usa español neutro colombiano, adecuado para todos los clientes, sin regionalismos ni jergas.
+
+3. Las respuestas deben ser claras, concisas, cortas y fáciles de entender, guiando siempre al cliente hacia una decisión de compra.
+
 4. No utilices lenguaje vulgar, ofensivo ni despectivo bajo ninguna circunstancia.
 
-# **Restricciones en el Comportamiento**
-1. **No generar chistes ni contenido humorístico**. Tu rol es puramente comercial y orientado a la atención al cliente en temas relacionados con café.
-2. **No usar comentarios groseros, vulgares o despectivos**. Mantén siempre un tono profesional y respetuoso.
-3. **No responder preguntas fuera de contexto**. Si un cliente te pregunta algo no relacionado con café o ventas, dile educadamente que no puedes ayudar con ese tema.
-4. **No inventes información**. Si no tienes la información específica que el cliente solicita, sé transparente y ofrece alternativas, 
-como contactar con el equipo adecuado.
-5. **No generar respuestas relacionadas con temas no comerciales** (política, entretenimiento, etc.).
-6. **Solo saludar al inicio de la conversación**. Evita saludos repetitivos en interacciones continuas.
-7. **No utilizar asteriscos, guiones u otros símbolos para resaltar texto**. Mantén el formato limpio y profesional.
+5. Usa emojis de forma natural y elegante para hacer las respuestas más atractivas y visuales. Los emojis deben ser relevantes al contenido y no excesivos.
 
-# **Estrategia de Interacción**
-1. **Contexto de Conversación:**
-    - Identifica si el cliente está en fase de **exploración** (buscando información) o en fase de **compra** (listo para realizar un pedido).
-    - Si el cliente está listo para comprar, guía de inmediato al proceso de pago o solicitud.
-    - Si el cliente está buscando información, ofrece detalles adicionales sobre productos o categorías relacionadas.
+# REGLA CRÍTICA SOBRE SALUDOS
 
-2. **Proactividad en Ofrecer Promociones:**
-    - Ofrece promociones vigentes en momentos clave de la conversación.
-    - Si el cliente pregunta por un producto, además de ofrecer opciones, menciona si hay alguna promoción asociada.
+NUNCA inicies tu respuesta con saludos como "Hola", "Hola qué tal", "Buenos días", etc.
+- Solo es permitido saludar SI el usuario acaba de iniciar la conversación POR PRIMERA VEZ
+- Si hay historial de conversación, NUNCA saludes
+- Si el usuario NO te saludó primero, NUNCA saludes
+- Ve DIRECTAMENTE al tema que el usuario pregunta
 
-3. **Personalización de la Experiencia:**
-    - Adapta tus respuestas en función de las preferencias del cliente, como tipo de café, intensidad, o tipo de molido.
-    - Si el cliente ha realizado compras previas, ofrece productos similares o sugerencias basadas en esas compras.
+# Formato de Respuestas
 
-4. **Manejo de Objeciones de Compra:**
-    - Si el cliente tiene dudas sobre el precio, la calidad o el proceso de compra, abórdalas de manera directa.
-    - Ofrece información adicional que justifique el valor del producto.
+Las respuestas deben ser atractivas y profesionales. Usa:
 
-5. **Manejo de Errores o Información Incompleta:**
-    - Si no tienes información precisa, sé honesto y redirige al cliente a un equipo especializado.
-    - Simplifica los pasos si el cliente necesita ayuda para realizar un pedido.
+- Párrafos cortos y claros, no muy largos
+- Saltos de línea para separar ideas
+- Emojis relevantes integrados naturalmente
+- Información estructurada pero sin tablas ni asteriscos
+- Destacar información importante con emojis, no con asteriscos ni guiones
+- Frases dinámicas que generen confianza y entusiasmo
 
-# **Objetivo Final**
-Brindar un servicio excepcional que facilite el proceso de compra y garantice una experiencia positiva para el cliente. 
-Sé **proactivo, cordial y profesional**, guiando siempre hacia una venta, pero respetando la autonomía del cliente.
+Ejemplos de estructura:
+
+Para productos:
+"Café Premium Huila ☕
+Tueste medio-claro con notas de frutas rojas y cítricos. Perfecto para prensa francesa.
+250g: $38.000 | 500g: $70.000
+Disponible en grano entero o molido"
+
+Para promociones:
+"Oferta especial para ti 🎉
+Compra 3 bolsas y paga solo 2. La bolsa de menor valor es gratis.
+Válido todos los días en tienda, web y WhatsApp"
+
+Para información:
+"Esto es lo que encontré 📌
+Punto 1: información importante
+Punto 2: información importante
+¿Te gustaría saber más? 😊"
+
+# Restricciones en el Comportamiento
+
+1. No generar chistes ni contenido humorístico. Tu rol es puramente comercial.
+2. No usar comentarios groseros, vulgares o despectivos.
+3. No responder preguntas fuera de contexto sobre café o ventas.
+4. No inventes información.
+5. No generar respuestas sobre temas no comerciales.
+6. No utilizar asteriscos, guiones, símbolos de subrayado u otros símbolos para resaltar texto.
+
+# Estrategia de Interacción
+
+1. Identifica si el cliente está en fase de exploración (buscando información) o en fase de compra (listo para realizar un pedido).
+2. Ofrece promociones vigentes en momentos clave.
+3. Adapta respuestas según preferencias del cliente.
+4. Aborda objeciones de compra directamente.
+5. Si no tienes información, sé honesto y redirige.
+
+# Objetivo Final
+
+Brindar un servicio excepcional que facilite el proceso de compra y garantice una experiencia positiva para el cliente. Sé proactivo, 
+cordial y profesional, guiando siempre hacia una venta, pero respetando la autonomía del cliente.
 """
-
-# ============================================================
-# Funciones auxiliares
-# ============================================================
 
 def build_context_from_kb(fragments: List[Dict[str, Any]]) -> str:
     """Construye el contexto a partir de los fragmentos recuperados"""
@@ -89,7 +113,7 @@ def build_context_from_kb(fragments: List[Dict[str, Any]]) -> str:
         text = payload.get("text", "")
         title = payload.get("title", f"Fragmento {i}")
         source = payload.get("source", "kb")
-        context_parts.append(f"**{title}** (fuente: {source}):\n{text}")
+        context_parts.append(f"{title} (fuente: {source}): {text}")
     
     return "\n\n".join(context_parts)
 
@@ -99,13 +123,57 @@ def build_conversation_context(messages: List[Dict[str, Any]]) -> str:
         return ""
     parts = []
     for msg in messages[-5:]:
-        role = "Usuario" if msg["role"] == "user" else "IZA"
-        parts.append(f"{role}: {msg['text']}")
+        role = "Usuario" if msg.get("role") == "user" else "IZA"
+        message_text = msg.get("message", "") or msg.get("text", "")
+        parts.append(f"{role}: {message_text}")
     return "\n".join(parts)
 
-# ============================================================
-# Función principal del agente
-# ============================================================
+def is_first_conversation(chat_context: List[Dict[str, Any]]) -> bool:
+    """Verifica si es la primera interacción del usuario"""
+    return len(chat_context) == 0
+
+def extract_greeting_patterns(response: str) -> bool:
+    """Verifica si la respuesta comienza con patrones de saludo"""
+    greeting_starters = [
+        "hola,",
+        "hola ",
+        "¡hola",
+        "buenos días",
+        "buenas tardes",
+        "buenas noches",
+        "hey,",
+        "hey ",
+        "¿hola",
+    ]
+    
+    response_lower = response.lower().strip()
+    return any(response_lower.startswith(greeting) for greeting in greeting_starters)
+
+def remove_greeting_from_response(response: str) -> str:
+    """Elimina saludos iniciales de la respuesta"""
+    greeting_patterns = [
+        ("hola,", 5),
+        ("hola ", 5),
+        ("¡hola", 5),
+        ("¡hola ", 6),
+        ("buenos días,", 12),
+        ("buenos días ", 12),
+        ("buenas tardes,", 14),
+        ("buenas tardes ", 14),
+        ("buenas noches,", 14),
+        ("buenas noches ", 14),
+    ]
+    
+    response_lower = response.lower()
+    
+    for pattern, length in greeting_patterns:
+        if response_lower.startswith(pattern):
+            rest = response[length:].strip()
+            if rest:
+                # Capitalizar correctamente
+                return rest[0].upper() + rest[1:] if len(rest) > 1 else rest.upper()
+    
+    return response
 
 async def get_agent_response(user_id: str, user_message: str, channel: str = "web") -> str:
     """
@@ -120,14 +188,17 @@ async def get_agent_response(user_id: str, user_message: str, channel: str = "we
             logger.warning(f"No hay mensajes pendientes en la cola de {user_id}, usando mensaje actual.")
             message_to_process = user_message
 
-
         # 2️⃣ Recuperar sesión y contexto desde Redis
         session = await get_user_session(user_id) or {}
         chat_context = await get_chat_context(user_id) or []
 
         logger.info(f"🧠 Procesando mensaje de {user_id} con contexto Redis...")
 
-        # 3️⃣ Buscar información relevante en Qdrant
+        # 3️⃣ Determinar si es primera conversación
+        is_first_interaction = is_first_conversation(chat_context)
+        logger.info(f"Primera interacción: {is_first_interaction}, Historial: {len(chat_context)} mensajes")
+
+        # 4️⃣ Buscar información relevante en Qdrant
         fragments = await search(
             query=message_to_process,
             top_k=settings.RAG_TOP_K,
@@ -137,32 +208,53 @@ async def get_agent_response(user_id: str, user_message: str, channel: str = "we
         kb_context = build_context_from_kb(fragments)
         has_kb_info = bool(kb_context.strip())
 
-        # 4️⃣ Construir prompt
-        recent_context_text = "\n".join(
-            [f"{m['role']}: {m['message']}" for m in chat_context[-5:]]
-        )
-        prompt = [
-            SYSTEM_PROMPT,
-            "\n--- CONTEXTO DE CONOCIMIENTO ---",
-            kb_context if has_kb_info else "Sin información relevante en KB.",
-            "\n--- HISTORIAL DE CONVERSACIÓN ---",
-            recent_context_text,
-            "\n--- MENSAJE ACTUAL ---",
-            f"Usuario: {message_to_process}",
-        ]
-        full_prompt = "\n".join(prompt)
+        # 5️⃣ Construir contexto de conversación
+        recent_context_text = build_conversation_context(chat_context)
 
-        # 5️⃣ Generar respuesta con Gemini o fallback
+        # 6️⃣ Instrucción especial para evitar saludos
+        no_greeting_instruction = ""
+        if not is_first_interaction:
+            no_greeting_instruction = (
+                "\n\nIMPORTANTE: El usuario ya ha hablado contigo antes. "
+                "NO SALUDES DE NINGUNA FORMA. Responde directamente a su pregunta sin ningún saludo inicial."
+            )
+
+        # 7️⃣ Construir prompt completo
+        prompt = (
+            f"{SYSTEM_PROMPT}"
+            f"{no_greeting_instruction}"
+            f"\n\n--- CONTEXTO DE CONOCIMIENTO ---\n"
+            f"{kb_context if has_kb_info else 'Sin información relevante en KB.'}"
+            f"\n\n--- HISTORIAL DE CONVERSACIÓN ---\n"
+            f"{recent_context_text if recent_context_text else '[Primer mensaje del usuario]'}"
+            f"\n\n--- MENSAJE ACTUAL DEL USUARIO ---\n"
+            f"{message_to_process}"
+            f"\n\n--- INSTRUCCIONES FINALES ---"
+            f"\nResponde como IZA de forma atractiva, profesional y con emojis naturales. "
+            f"NO incluyas saludo alguno en tu respuesta. Ve directo a ayudar al usuario. "
+            f"No uses asteriscos, guiones ni otros símbolos para resaltar. "
+            f"Usa emojis para destacar información importante."
+        )
+
+        # 8️⃣ Generar respuesta con Gemini o fallback
         if GEMINI_AVAILABLE and settings.GEMINI_API_KEY and settings.USE_GEMINI:
-            response = await generate_with_gemini(full_prompt, message_to_process)
+            response = await generate_with_gemini(prompt, message_to_process)
         else:
             response = generate_fallback_response(message_to_process, kb_context)
 
-        # 6️⃣ Guardar en Redis los turnos y la sesión
+        # 9️⃣ Limpiar saludos de la respuesta (medida de seguridad)
+        if not is_first_interaction:
+            # Si detectamos saludo en conversación continua, removerlo
+            if extract_greeting_patterns(response):
+                logger.warning(f"⚠️ Saludo detectado en respuesta para {user_id}, removiendo...")
+                response = remove_greeting_from_response(response)
+
+        # 🔟 Guardar en Redis los turnos y la sesión
         await add_chat_turn(user_id, message_to_process, "user")
         await add_chat_turn(user_id, response, "assistant")
 
         session["last_message"] = message_to_process
+        session["conversation_started"] = True
         await set_user_session(user_id, session)
 
         logger.info(f"✅ Respuesta generada para {user_id}: {response[:80]}...")
@@ -174,11 +266,7 @@ async def get_agent_response(user_id: str, user_message: str, channel: str = "we
         await clear_chat_context(user_id)
         return "Disculpa, hubo un error procesando tu mensaje. Intenta más tarde."
 
-# ============================================================
-# Generación con Gemini
-# ============================================================
-
-async def generate_with_gemini(system_prompt: str, user_message: str) -> str:
+async def generate_with_gemini(full_prompt: str, user_message: str) -> str:
     """Genera respuesta usando Google Gemini"""
     try:
         model_mapping = {
@@ -191,14 +279,13 @@ async def generate_with_gemini(system_prompt: str, user_message: str) -> str:
         model = genai.GenerativeModel(
             model_name=model_name,
             generation_config={
-                "temperature": 0.5,
+                "temperature": 0.3,  # Reducido a 0.3 para respuestas más consistentes
                 "top_p": 0.9,
                 "max_output_tokens": 350,
             }
         )
 
-        prompt = f"{system_prompt}\n\nUsuario: {user_message}\nIZA:"
-        response = model.generate_content(prompt)
+        response = model.generate_content(full_prompt)
 
         if response and response.text:
             return response.text.strip()
@@ -210,15 +297,11 @@ async def generate_with_gemini(system_prompt: str, user_message: str) -> str:
         logger.exception(f"Error en Gemini: {e}")
         return ""
 
-# ============================================================
-# Respuesta de fallback (solo si no hay KB)
-# ============================================================
-
 def generate_fallback_response(user_message: str, context: str) -> str:
     """Respuesta de fallback cuando Gemini no está disponible"""
     if not context.strip():
         return (
-            "Hola, soy IZA. Por ahora no tengo información específica sobre eso, "
+            "Por ahora no tengo información específica sobre eso, "
             "pero puedo ponerte en contacto con nuestro equipo comercial. "
             "¿Podrías contarme un poco más de lo que buscas?"
         )
