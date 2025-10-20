@@ -3,6 +3,7 @@ import json
 import logging
 import redis.asyncio as redis
 from app.config import settings
+from datetime import datetime
 
 logger = logging.getLogger(__name__)
 redis_client = None
@@ -52,32 +53,70 @@ async def get_user_session(user_id: str):
 
 
 async def update_purchase_session(user_id: str, user_message: str):
+    """
+    Actualiza la sesión de compra de un usuario según el mensaje recibido.
+    - Mantiene el estado actual si el mensaje no es relevante.
+    - Permite avanzar progresivamente en el flujo de compra.
+    """
     session = await get_user_session(user_id) or {}
-    message_lower = user_message.lower()
+    message_lower = user_message.lower().strip()
 
-    # Detectar tipo de café
-    if any(x in message_lower for x in ["huila", "nariño", "tolima", "clásico", "descafeinado"]):
+    # Crear estado inicial si no existe
+    state = session.get("state", "START")
+
+    # Diccionario de palabras clave
+    coffee_keywords = ["huila", "nariño", "tolima", "clásico", "descafeinado"]
+    quantity_keywords = ["250", "500", "1kg", "1000"]
+    payment_keywords = ["pse", "nequi", "daviplata", "tarjeta", "efectivo"]
+    shipping_keywords = ["cra", "cll", "calle", "avenida"]
+
+    # Flag para saber si algo cambió
+    state_changed = False
+
+    # --- Lógica de avance en el flujo ---
+    if any(x in message_lower for x in coffee_keywords):
         session["product"] = user_message
         session["state"] = "PRODUCT_SELECTED"
+        state_changed = True
 
-    # Detectar cantidad
-    elif any(x in message_lower for x in ["250", "500"]):
+    elif any(x in message_lower for x in quantity_keywords):
         session["quantity"] = user_message
         session["state"] = "AWAITING_PAYMENT"
+        state_changed = True
 
-    # Detectar método de pago
-    elif any(x in message_lower for x in ["pse", "nequi", "daviplata", "tarjeta", "efectivo"]):
+    elif any(x in message_lower for x in payment_keywords):
         session["payment"] = user_message
         session["state"] = "AWAITING_SHIPPING"
+        state_changed = True
 
-    # Detectar datos de envío
-    elif any(x in message_lower for x in ["cra", "cll", "calle", "avenida"]) or len(message_lower.split()) > 3:
-        session.setdefault("shipping_data", []).append(user_message)
-        if len(session["shipping_data"]) >= 4:
+    elif (
+        state == "AWAITING_SHIPPING" and
+        (any(x in message_lower for x in shipping_keywords) or len(message_lower.split()) > 3)
+    ):
+        shipping = session.get("shipping_data", [])
+        shipping.append(user_message)
+        session["shipping_data"] = shipping
+        if len(shipping) >= 2:  # Se puede ajustar según lo que pidas
             session["state"] = "CONFIRMING_ORDER"
+        state_changed = True
+
+    # --- Si no cambió el estado ---
+    if not state_changed:
+        # Mantener el estado actual
+        session["state"] = state
+
+        # También podrías agregar un pequeño registro del mensaje “fuera de flujo”
+        extras = session.get("extra_messages", [])
+        extras.append(user_message)
+        # Guardar máximo 10 para evitar crecer sin límite
+        session["extra_messages"] = extras[-10:]
+
+    # Actualizar timestamp de última interacción
+    session["last_interaction"] = datetime.now().isoformat()
 
     await set_user_session(user_id, session)
     return session
+
 
 
 async def clear_user_session(user_id: str):

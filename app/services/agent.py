@@ -230,95 +230,78 @@ def remove_greeting_from_response(response: str) -> str:
 async def get_agent_response(user_id: str, user_message: str, channel: str = "web") -> str:
     """
     Genera respuesta del agente usando Redis, RAG y Gemini.
-    Maneja contexto, sesión y cola de mensajes, y flujo de compra.
+    Maneja contexto, sesión y flujo de compra.
     """
     try:
-        # 1️⃣ Agregar mensaje del usuario a la cola
-        await push_message_queue(user_id, user_message)
-        message_to_process = await pop_message_queue(user_id)
-        if not message_to_process:
-            logger.warning(f"No hay mensajes pendientes en la cola de {user_id}, usando mensaje actual.")
-            message_to_process = user_message
+        # 1️⃣ Actualizar sesión con posible información de compra
+        session = await update_purchase_session(user_id, user_message)
+        purchase_state = session.get("state")
 
-        # 2️⃣ Actualizar sesión con posible información de compra
-        session = await update_purchase_session(user_id, message_to_process)
+        # 2️⃣ Guardar turno del usuario en contexto (antes de generar respuesta)
+        await add_chat_turn(user_id, user_message, "user")
+
+        # 3️⃣ Recuperar contexto actualizado
         chat_context = await get_chat_context(user_id) or []
 
-        logger.info(f"🧠 Procesando mensaje de {user_id} con contexto Redis...")
-        logger.info(f"📦 Estado de compra actual: {session.get('state', 'SIN_ESTADO')}")
-
-        # 🧩 2.1️⃣ Lógica especial: responder según el estado de compra
-        purchase_state = session.get("state")
+        # 4️⃣ Lógica especial según el estado de compra
         if purchase_state == "PRODUCT_SELECTED":
-            return "Perfecto ☕ ¿Cuántos gramos deseas? Tenemos presentaciones de 250g y 500g."
+            response = "Perfecto ☕ ¿Cuántos gramos deseas? Tenemos presentaciones de 250g y 500g."
         elif purchase_state == "AWAITING_PAYMENT":
-            return "Genial 💰 ¿Qué método de pago prefieres? Aceptamos PSE, Nequi, Daviplata, tarjeta y efectivo."
+            response = "Genial 💰 ¿Qué método de pago prefieres? Aceptamos PSE, Nequi, Daviplata, tarjeta y efectivo."
         elif purchase_state == "AWAITING_SHIPPING":
-            return "¡Excelente! 🚚 Por favor indícame tu dirección completa para el envío (ej: Calle 10 #12-34, Bogotá)."
+            response = "¡Excelente! 🚚 Por favor indícame tu dirección completa para el envío (ej: Calle 10 #12-34, Bogotá)."
         elif purchase_state == "CONFIRMING_ORDER":
-            return (
+            response = (
                 "Perfecto 🙌 Tu pedido está casi listo. "
                 "¿Confirmas tu orden para proceder con el envío?"
             )
-
-        # 3️⃣ Determinar si es primera conversación
-        is_first_interaction = is_first_conversation(chat_context)
-        logger.info(f"Primera interacción: {is_first_interaction}, Historial: {len(chat_context)} mensajes")
-
-        # 4️⃣ Buscar información relevante en Qdrant
-        fragments = await search(
-            query=message_to_process,
-            top_k=settings.RAG_TOP_K,
-            score_threshold=settings.RAG_SCORE_THRESHOLD
-        )
-
-        kb_context = build_context_from_kb(fragments)
-        has_kb_info = bool(kb_context.strip())
-
-        # 5️⃣ Construir contexto de conversación
-        recent_context_text = build_conversation_context(chat_context)
-
-        # 6️⃣ Instrucción especial para evitar saludos
-        no_greeting_instruction = ""
-        if not is_first_interaction:
-            no_greeting_instruction = (
-                "\n\nIMPORTANTE: El usuario ya ha hablado contigo antes. "
-                "NO SALUDES DE NINGUNA FORMA. Responde directamente a su pregunta sin ningún saludo inicial."
+        else:
+            # 🧠 Si no está en flujo de compra, continúa con RAG y contexto
+            is_first_interaction = is_first_conversation(chat_context)
+            fragments = await search(
+                query=user_message,
+                top_k=settings.RAG_TOP_K,
+                score_threshold=settings.RAG_SCORE_THRESHOLD
             )
 
-        # 7️⃣ Construir prompt completo
-        prompt = (
-            f"{SYSTEM_PROMPT}"
-            f"{no_greeting_instruction}"
-            f"\n\n--- CONTEXTO DE CONOCIMIENTO ---\n"
-            f"{kb_context if has_kb_info else 'Sin información relevante en KB.'}"
-            f"\n\n--- HISTORIAL DE CONVERSACIÓN ---\n"
-            f"{recent_context_text if recent_context_text else '[Primer mensaje del usuario]'}"
-            f"\n\n--- MENSAJE ACTUAL DEL USUARIO ---\n"
-            f"{message_to_process}"
-            f"\n\n--- INSTRUCCIONES FINALES ---"
-            f"\nResponde como IZA de forma atractiva, profesional y con emojis naturales. "
-            f"NO incluyas saludo alguno en tu respuesta. Ve directo a ayudar al usuario. "
-            f"No uses asteriscos, guiones ni otros símbolos para resaltar. "
-            f"Usa emojis para destacar información importante."
-        )
+            kb_context = build_context_from_kb(fragments)
+            has_kb_info = bool(kb_context.strip())
+            recent_context_text = build_conversation_context(chat_context)
 
-        # 8️⃣ Generar respuesta con Gemini o fallback
-        if GEMINI_AVAILABLE and settings.GEMINI_API_KEY and settings.USE_GEMINI:
-            response = await generate_with_gemini(prompt, message_to_process)
-        else:
-            response = generate_fallback_response(message_to_process, kb_context)
+            no_greeting_instruction = ""
+            if not is_first_interaction:
+                no_greeting_instruction = (
+                    "\n\nIMPORTANTE: El usuario ya ha hablado contigo antes. "
+                    "NO SALUDES DE NINGUNA FORMA. Responde directamente a su pregunta sin ningún saludo inicial."
+                )
 
-        # 9️⃣ Limpiar saludos de la respuesta (medida de seguridad)
-        if not is_first_interaction and extract_greeting_patterns(response):
-            logger.warning(f"⚠️ Saludo detectado en respuesta para {user_id}, removiendo...")
-            response = remove_greeting_from_response(response)
+            prompt = (
+                f"{SYSTEM_PROMPT}"
+                f"{no_greeting_instruction}"
+                f"\n\n--- CONTEXTO DE CONOCIMIENTO ---\n"
+                f"{kb_context if has_kb_info else 'Sin información relevante en KB.'}"
+                f"\n\n--- HISTORIAL DE CONVERSACIÓN ---\n"
+                f"{recent_context_text if recent_context_text else '[Primer mensaje del usuario]'}"
+                f"\n\n--- MENSAJE ACTUAL DEL USUARIO ---\n"
+                f"{user_message}"
+                f"\n\n--- INSTRUCCIONES FINALES ---"
+                f"\nResponde como IZA de forma atractiva, profesional y con emojis naturales. "
+                f"NO incluyas saludo alguno en tu respuesta. Ve directo a ayudar al usuario."
+            )
 
-        # 🔟 Guardar en Redis los turnos y la sesión
-        await add_chat_turn(user_id, message_to_process, "user")
+            if GEMINI_AVAILABLE and settings.GEMINI_API_KEY and settings.USE_GEMINI:
+                response = await generate_with_gemini(prompt, user_message)
+            else:
+                response = generate_fallback_response(user_message, kb_context)
+
+            if not is_first_interaction and extract_greeting_patterns(response):
+                response = remove_greeting_from_response(response)
+
+        # 5️⃣ Guardar turno del bot en el contexto
         await add_chat_turn(user_id, response, "assistant")
 
-        session["last_message"] = message_to_process
+        # 6️⃣ Actualizar sesión
+        session["last_message"] = user_message
         session["conversation_started"] = True
         await set_user_session(user_id, session)
 
