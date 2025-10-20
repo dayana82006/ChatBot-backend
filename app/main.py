@@ -20,46 +20,34 @@ logger = logging.getLogger(__name__)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Gestión del ciclo de vida de la aplicación"""
     logger.info("🚀 Iniciando aplicación FastAPI...")
-    
     try:
-        # Inicializar base de datos
-        logger.info("Inicializando base de datos...")
         init_db()
         execute_schema()
-        
-        # Inicializar Redis
+
         logger.info("Inicializando Redis...")
         await init_redis()
-        ...
-        yield
-        logger.info("🔄 Cerrando aplicación...")
-        await close_redis()
-        
-        # Inicializar Qdrant
+
         logger.info("Inicializando Qdrant...")
         ensure_collection()
         collection_info = get_collection_info()
         logger.info(f"Colección Qdrant: {collection_info}")
-        
-        # Verificar Gemini
+
         if settings.USE_GEMINI and settings.GEMINI_API_KEY:
             logger.info("✅ Gemini API configurada")
         else:
-            logger.warning("⚠️ Gemini no configurada, usando respuestas de fallback")
-        
+            logger.warning("⚠️ Gemini no configurada, usando fallback")
+
         logger.info("✅ Aplicación iniciada correctamente")
-        
+        yield  # ← Aquí corre la app con Redis ya listo
+
     except Exception as e:
         logger.error(f"❌ Error durante el inicio: {e}")
         raise
-    
-    yield  # Aquí corre la app normalmente
-    
-    # Al detener la app
-    logger.info("🔄 Cerrando aplicación...")
-    close_redis()
+
+    finally:
+        logger.info("🔄 Cerrando aplicación...")
+        await close_redis()
 
 app = FastAPI(
     title="Asistente Comercial IZA - MVP",

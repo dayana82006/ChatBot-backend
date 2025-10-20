@@ -8,7 +8,7 @@ from app.services.redisServices import (
     get_user_session, set_user_session,
     get_chat_context, add_chat_turn,
     push_message_queue, pop_message_queue,
-    clear_user_session, clear_chat_context
+    clear_user_session, clear_chat_context, update_purchase_session
 )
 logger = logging.getLogger(__name__)
 
@@ -230,7 +230,7 @@ def remove_greeting_from_response(response: str) -> str:
 async def get_agent_response(user_id: str, user_message: str, channel: str = "web") -> str:
     """
     Genera respuesta del agente usando Redis, RAG y Gemini.
-    Maneja contexto, sesión y cola de mensajes.
+    Maneja contexto, sesión y cola de mensajes, y flujo de compra.
     """
     try:
         # 1️⃣ Agregar mensaje del usuario a la cola
@@ -240,11 +240,26 @@ async def get_agent_response(user_id: str, user_message: str, channel: str = "we
             logger.warning(f"No hay mensajes pendientes en la cola de {user_id}, usando mensaje actual.")
             message_to_process = user_message
 
-        # 2️⃣ Recuperar sesión y contexto desde Redis
-        session = await get_user_session(user_id) or {}
+        # 2️⃣ Actualizar sesión con posible información de compra
+        session = await update_purchase_session(user_id, message_to_process)
         chat_context = await get_chat_context(user_id) or []
 
         logger.info(f"🧠 Procesando mensaje de {user_id} con contexto Redis...")
+        logger.info(f"📦 Estado de compra actual: {session.get('state', 'SIN_ESTADO')}")
+
+        # 🧩 2.1️⃣ Lógica especial: responder según el estado de compra
+        purchase_state = session.get("state")
+        if purchase_state == "PRODUCT_SELECTED":
+            return "Perfecto ☕ ¿Cuántos gramos deseas? Tenemos presentaciones de 250g y 500g."
+        elif purchase_state == "AWAITING_PAYMENT":
+            return "Genial 💰 ¿Qué método de pago prefieres? Aceptamos PSE, Nequi, Daviplata, tarjeta y efectivo."
+        elif purchase_state == "AWAITING_SHIPPING":
+            return "¡Excelente! 🚚 Por favor indícame tu dirección completa para el envío (ej: Calle 10 #12-34, Bogotá)."
+        elif purchase_state == "CONFIRMING_ORDER":
+            return (
+                "Perfecto 🙌 Tu pedido está casi listo. "
+                "¿Confirmas tu orden para proceder con el envío?"
+            )
 
         # 3️⃣ Determinar si es primera conversación
         is_first_interaction = is_first_conversation(chat_context)
@@ -295,11 +310,9 @@ async def get_agent_response(user_id: str, user_message: str, channel: str = "we
             response = generate_fallback_response(message_to_process, kb_context)
 
         # 9️⃣ Limpiar saludos de la respuesta (medida de seguridad)
-        if not is_first_interaction:
-            # Si detectamos saludo en conversación continua, removerlo
-            if extract_greeting_patterns(response):
-                logger.warning(f"⚠️ Saludo detectado en respuesta para {user_id}, removiendo...")
-                response = remove_greeting_from_response(response)
+        if not is_first_interaction and extract_greeting_patterns(response):
+            logger.warning(f"⚠️ Saludo detectado en respuesta para {user_id}, removiendo...")
+            response = remove_greeting_from_response(response)
 
         # 🔟 Guardar en Redis los turnos y la sesión
         await add_chat_turn(user_id, message_to_process, "user")

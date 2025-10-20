@@ -50,6 +50,36 @@ async def get_user_session(user_id: str):
         data = await redis_client.get(f"session:{user_id}")
         return json.loads(data) if data else {}
 
+
+async def update_purchase_session(user_id: str, user_message: str):
+    session = await get_user_session(user_id) or {}
+    message_lower = user_message.lower()
+
+    # Detectar tipo de café
+    if any(x in message_lower for x in ["huila", "nariño", "tolima", "clásico", "descafeinado"]):
+        session["product"] = user_message
+        session["state"] = "PRODUCT_SELECTED"
+
+    # Detectar cantidad
+    elif any(x in message_lower for x in ["250", "500"]):
+        session["quantity"] = user_message
+        session["state"] = "AWAITING_PAYMENT"
+
+    # Detectar método de pago
+    elif any(x in message_lower for x in ["pse", "nequi", "daviplata", "tarjeta", "efectivo"]):
+        session["payment"] = user_message
+        session["state"] = "AWAITING_SHIPPING"
+
+    # Detectar datos de envío
+    elif any(x in message_lower for x in ["cra", "cll", "calle", "avenida"]) or len(message_lower.split()) > 3:
+        session.setdefault("shipping_data", []).append(user_message)
+        if len(session["shipping_data"]) >= 4:
+            session["state"] = "CONFIRMING_ORDER"
+
+    await set_user_session(user_id, session)
+    return session
+
+
 async def clear_user_session(user_id: str):
     if redis_client:
         await redis_client.delete(f"session:{user_id}")
