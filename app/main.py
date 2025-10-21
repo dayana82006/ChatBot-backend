@@ -93,6 +93,14 @@ app.include_router(whatsapp.router, prefix="/whatsapp", tags=["WhatsApp"])
 app.include_router(admin.router, tags=["Admin"])
 app.include_router(websocket.router, tags=["WebSocket"])
 
+@app.get("/test_redis")
+async def test_redis():
+    from app.services.redisServices import redis_client, set_cache, get_cache
+    await set_cache("test_key", {"msg": "Hola Redis!"})
+    value = await get_cache("test_key")
+    return {"resultado": value, "ping": await redis_client.ping()}
+
+
 @app.get("/health", summary="Health Check", tags=["System"])
 async def health_check():
     try:
