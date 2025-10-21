@@ -1,6 +1,7 @@
 from app.database.database import get_connection
 from typing import Optional, List, Dict, Any
 import logging
+import asyncio
 
 logger = logging.getLogger(__name__)
 
@@ -51,6 +52,18 @@ def get_or_create_chat(user_id: str, channel: str = "web") -> int:
     if chat:
         return chat['id']
     return create_chat(user_id, channel)
+
+
+
+async def create_new_chat_for_user(user_id: str, channel: str = "web") -> int:
+    """
+    Envuelve la función get_or_create_chat en un entorno asincrónico.
+    Retorna el ID del chat existente o crea uno nuevo.
+    """
+    loop = asyncio.get_event_loop()
+    chat_id = await loop.run_in_executor(None, get_or_create_chat, user_id, channel)
+    return chat_id
+
 
 
 def get_all_chats_with_summary(

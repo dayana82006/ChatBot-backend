@@ -3,6 +3,13 @@ import json
 import logging
 import redis.asyncio as redis
 from app.config import settings
+from app.database.database import get_connection
+from app.queries.chatQueries import get_or_create_chat
+from app.queries.userQueries import get_user_by_id, create_user
+from app import redis_client
+
+
+
 
 logger = logging.getLogger(__name__)
 redis_client = None
@@ -49,6 +56,47 @@ async def get_user_session(user_id: str):
     if redis_client:
         data = await redis_client.get(f"session:{user_id}")
         return json.loads(data) if data else {}
+
+async def clear_user_session(user_id: str):
+    if redis_client:
+        await redis_client.delete(f"session:{user_id}")
+
+# ==== SINCRONIZACIÓN REDIS <-> MYSQL ====
+async def sync_user_session(user_id: str, channel: str = "web"):
+    """
+    Verifica si el usuario tiene sesión activa en Redis,
+    si no, la busca o crea en la base de datos.
+    """
+    # 1️⃣ Buscar en Redis
+    session = await get_user_session(user_id)
+    if session:
+        logger.info(f"Sesión encontrada en Redis: {user_id}")
+        return session
+
+    logger.info(f"No se encontró sesión en Redis para {user_id}, buscando en BD...")
+
+    # 2️⃣ Buscar usuario en base de datos
+    user = get_user_by_id(user_id)
+    if not user:
+        logger.info(f"Usuario {user_id} no existe, creando...")
+        user = create_user(user_id, channel=channel)
+
+    # 3️⃣ Buscar chat existente o crear uno nuevo
+    chat_id = get_or_create_chat(user_id, channel)
+
+    # 4️⃣ Crear sesión base
+    session_data = {
+        "user_id": user_id,
+        "chat_id": chat_id,
+        "channel": channel,
+        "context": []
+    }
+
+    # 5️⃣ Guardar sesión en Redis
+    await set_user_session(user_id, session_data)
+    logger.info(f"Sesión creada y guardada en Redis para {user_id}")
+    return session_data
+
 
 async def clear_user_session(user_id: str):
     if redis_client:

@@ -4,6 +4,9 @@ from app.services.qdrant_service import search
 from app.queries.chatQueries import get_or_create_chat
 from app.queries.messageQueries import add_message, get_recent_messages_by_user
 from app.config import settings
+
+from app.services.sessionManager import initialize_user_session
+
 from app.services.redisServices import (
     get_user_session, set_user_session,
     get_chat_context, add_chat_turn,
@@ -230,27 +233,35 @@ def remove_greeting_from_response(response: str) -> str:
 async def get_agent_response(user_id: str, user_message: str, channel: str = "web") -> str:
     """
     Genera respuesta del agente usando Redis, RAG y Gemini.
-    Maneja contexto, sesión y cola de mensajes.
+    Maneja inicialización de sesión, contexto, cola de mensajes y persistencia.
     """
     try:
-        # 1️⃣ Agregar mensaje del usuario a la cola
+        # 1️⃣ Inicializar sesión si no existe
+        session = await initialize_user_session(user_id, channel)
+        chat_id = session.get("chat_id")
+        if not chat_id:
+            logger.warning(f"No se encontró chat_id para {user_id}, generando uno nuevo...")
+            session["chat_id"] = await create_new_chat_for_user(user_id)
+            await set_user_session(user_id, session)
+
+        # 2️⃣ Agregar mensaje del usuario a la cola
         await push_message_queue(user_id, user_message)
         message_to_process = await pop_message_queue(user_id)
         if not message_to_process:
             logger.warning(f"No hay mensajes pendientes en la cola de {user_id}, usando mensaje actual.")
             message_to_process = user_message
 
-        # 2️⃣ Recuperar sesión y contexto desde Redis
+        # 3️⃣ Recuperar sesión y contexto desde Redis
         session = await get_user_session(user_id) or {}
         chat_context = await get_chat_context(user_id) or []
 
         logger.info(f"🧠 Procesando mensaje de {user_id} con contexto Redis...")
 
-        # 3️⃣ Determinar si es primera conversación
+        # 4️⃣ Determinar si es primera conversación
         is_first_interaction = is_first_conversation(chat_context)
         logger.info(f"Primera interacción: {is_first_interaction}, Historial: {len(chat_context)} mensajes")
 
-        # 4️⃣ Buscar información relevante en Qdrant
+        # 5️⃣ Buscar información relevante en Qdrant
         fragments = await search(
             query=message_to_process,
             top_k=settings.RAG_TOP_K,
@@ -260,10 +271,10 @@ async def get_agent_response(user_id: str, user_message: str, channel: str = "we
         kb_context = build_context_from_kb(fragments)
         has_kb_info = bool(kb_context.strip())
 
-        # 5️⃣ Construir contexto de conversación
+        # 6️⃣ Construir contexto de conversación
         recent_context_text = build_conversation_context(chat_context)
 
-        # 6️⃣ Instrucción especial para evitar saludos
+        # 7️⃣ Instrucción para evitar saludos repetidos
         no_greeting_instruction = ""
         if not is_first_interaction:
             no_greeting_instruction = (
@@ -271,7 +282,7 @@ async def get_agent_response(user_id: str, user_message: str, channel: str = "we
                 "NO SALUDES DE NINGUNA FORMA. Responde directamente a su pregunta sin ningún saludo inicial."
             )
 
-        # 7️⃣ Construir prompt completo
+        # 8️⃣ Construir prompt completo
         prompt = (
             f"{SYSTEM_PROMPT}"
             f"{no_greeting_instruction}"
@@ -288,23 +299,26 @@ async def get_agent_response(user_id: str, user_message: str, channel: str = "we
             f"Usa emojis para destacar información importante."
         )
 
-        # 8️⃣ Generar respuesta con Gemini o fallback
+        # 9️⃣ Generar respuesta con Gemini o fallback
         if GEMINI_AVAILABLE and settings.GEMINI_API_KEY and settings.USE_GEMINI:
             response = await generate_with_gemini(prompt, message_to_process)
         else:
             response = generate_fallback_response(message_to_process, kb_context)
 
-        # 9️⃣ Limpiar saludos de la respuesta (medida de seguridad)
-        if not is_first_interaction:
-            # Si detectamos saludo en conversación continua, removerlo
-            if extract_greeting_patterns(response):
-                logger.warning(f"⚠️ Saludo detectado en respuesta para {user_id}, removiendo...")
-                response = remove_greeting_from_response(response)
+        # 🔟 Limpiar saludos en conversación continua
+        if not is_first_interaction and extract_greeting_patterns(response):
+            logger.warning(f"⚠️ Saludo detectado en respuesta para {user_id}, removiendo...")
+            response = remove_greeting_from_response(response)
 
-        # 🔟 Guardar en Redis los turnos y la sesión
+        # 11️⃣ Guardar mensajes en Redis
         await add_chat_turn(user_id, message_to_process, "user")
         await add_chat_turn(user_id, response, "assistant")
 
+        # 12️⃣ Guardar también en base de datos si aplica
+        await add_message(chat_id, "user", message_to_process)
+        await add_message(chat_id, "assistant", response)
+
+        # 13️⃣ Actualizar sesión
         session["last_message"] = message_to_process
         session["conversation_started"] = True
         await set_user_session(user_id, session)
