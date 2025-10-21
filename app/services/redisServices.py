@@ -103,3 +103,32 @@ async def push_message_queue(user_id: str, message: str):
 async def pop_message_queue(user_id: str):
     if redis_client:
         return await redis_client.lpop(f"queue:{user_id}")
+
+## === SINCRONIZAR LA SESION 
+
+async def sync_user_session(user_id: str, channel: str):
+    """
+    Sincroniza o crea la sesión del usuario en Redis.
+    """
+    # Intenta obtener la sesión actual
+    session = await get_user_session(user_id)
+
+    if not session:
+        # Si no existe, crear una nueva sesión básica
+        session = {
+            "user_id": user_id,
+            "channel": channel,
+            "state": "idle",
+            "context": [],
+            "purchase": {},
+        }
+        await set_user_session(user_id, session)
+        logger.info(f"🆕 Nueva sesión creada para {user_id}")
+    else:
+        # Actualiza canal si cambió (opcional)
+        if session.get("channel") != channel:
+            session["channel"] = channel
+            await set_user_session(user_id, session)
+            logger.info(f"🔄 Canal actualizado para {user_id}: {channel}")
+
+    return session

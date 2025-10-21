@@ -4,8 +4,8 @@ from app.services.qdrant_service import search
 from app.queries.chatQueries import get_or_create_chat
 from app.queries.messageQueries import add_message, get_recent_messages_by_user
 from app.config import settings
-
-from app.services.sessionManager import initialize_user_session
+from app.queries.chatQueries import create_new_chat_for_user
+from app.services.sesionManager import initialize_user_session
 
 from app.services.redisServices import (
     get_user_session, set_user_session,
