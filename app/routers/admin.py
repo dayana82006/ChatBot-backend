@@ -6,6 +6,7 @@ import logging
 from app.queries.chatQueries import get_all_chats_with_summary
 from app.queries.messageQueries import get_messages_by_chat
 from app.queries.chatQueries import get_chat_by_user
+from app.services.redisServices import get_chat_context 
 
 router = APIRouter(prefix="/admin", tags=["Admin"])
 logger = logging.getLogger(__name__)
@@ -78,47 +79,48 @@ async def list_all_chats_with_messages():
         raise HTTPException(status_code=500, detail="Error interno del servidor")
 
 
+
 @router.get("/chats/{user_id}", response_model=ChatDetailResponse, summary="Detalle de chat específico")
 async def get_chat_detail(
     user_id: str,
     channel: str = Query("web", description="Canal del chat")
 ):
     """
-    Obtiene el historial completo de mensajes de un chat específico.
+    Obtiene el historial completo de mensajes de un chat específico desde Redis.
     
     - **user_id**: ID del usuario
     - **channel**: Canal de comunicación (web, whatsapp, telegram)
     """
     try:
         logger.info(f"Admin: Getting chat detail for user_id={user_id}, channel={channel}")
-        
-        # Buscar el chat
-        chat = get_chat_by_user(user_id, channel)
-        if not chat:
+
+        # 🔹 Obtenemos los mensajes del contexto de Redis
+        chat_context = await get_chat_context(user_id)
+
+        if not chat_context:
             raise HTTPException(
-                status_code=404, 
-                detail=f"Chat no encontrado para user_id={user_id}, channel={channel}"
+                status_code=404,
+                detail=f"No hay mensajes guardados en Redis para user_id={user_id}"
             )
-        
-        # Obtener mensajes del chat
-        messages = get_messages_by_chat(chat["id"])
-        
-        # Convertir mensajes a objetos Pydantic
+
+        # 🔹 Convertimos los mensajes al modelo ChatMessage
         chat_messages = []
-        for msg in messages:
-            chat_message = ChatMessage(
-                role=msg["role"],
-                text=msg["text"],
-                timestamp=msg["timestamp"]
+        for item in chat_context:
+            chat_messages.append(
+                ChatMessage(
+                    role=item.get("role", "user"),
+                    text=item.get("message", ""),
+                    timestamp=datetime.datetime.now()  # Redis no guarda timestamp
+                )
             )
-            chat_messages.append(chat_message)
-        
+
+        # 🔹 Devolvemos la respuesta compatible con el frontend
         return ChatDetailResponse(
             user_id=user_id,
-            channel=chat["channel"] or "web",
+            channel=channel,
             messages=chat_messages
         )
-        
+
     except HTTPException:
         raise
     except Exception as e:
