@@ -53,69 +53,51 @@ async def get_user_session(user_id: str):
 
 
 async def update_purchase_session(user_id: str, user_message: str):
-    """
-    Actualiza la sesión de compra de un usuario según el mensaje recibido.
-    - Mantiene el estado actual si el mensaje no es relevante.
-    - Permite avanzar progresivamente en el flujo de compra.
-    """
     session = await get_user_session(user_id) or {}
-    message_lower = user_message.lower().strip()
+    message_lower = user_message.lower()
 
-    # Crear estado inicial si no existe
-    state = session.get("state", "START")
+    if "state" not in session:
+        session["state"] = "START"
 
-    # Diccionario de palabras clave
-    coffee_keywords = ["huila", "nariño", "tolima", "clásico", "descafeinado"]
-    quantity_keywords = ["250", "500", "1kg", "1000"]
-    payment_keywords = ["pse", "nequi", "daviplata", "tarjeta", "efectivo"]
-    shipping_keywords = ["cra", "cll", "calle", "avenida"]
+    prev_state = session["state"]
 
-    # Flag para saber si algo cambió
-    state_changed = False
+    # 🧠 Detectar información relevante
+    if prev_state == "START":
+        if any(x in message_lower for x in ["huila", "nariño", "tolima", "clásico", "descafeinado"]):
+            session["product"] = user_message
+            session["state"] = "PRODUCT_SELECTED"
 
-    # --- Lógica de avance en el flujo ---
-    if any(x in message_lower for x in coffee_keywords):
-        session["product"] = user_message
-        session["state"] = "PRODUCT_SELECTED"
-        state_changed = True
+    elif prev_state == "PRODUCT_SELECTED":
+        if any(x in message_lower for x in ["250", "500", "1kg", "1000"]):
+            session["quantity"] = user_message
+            session["state"] = "AWAITING_PAYMENT"
 
-    elif any(x in message_lower for x in quantity_keywords):
-        session["quantity"] = user_message
-        session["state"] = "AWAITING_PAYMENT"
-        state_changed = True
+    elif prev_state == "AWAITING_PAYMENT":
+        if any(x in message_lower for x in ["pse", "nequi", "daviplata", "tarjeta", "efectivo"]):
+            session["payment"] = user_message
+            session["state"] = "AWAITING_SHIPPING"
 
-    elif any(x in message_lower for x in payment_keywords):
-        session["payment"] = user_message
-        session["state"] = "AWAITING_SHIPPING"
-        state_changed = True
+    elif prev_state == "AWAITING_SHIPPING":
+        if any(x in message_lower for x in ["cra", "cll", "calle", "avenida"]) or len(message_lower.split()) > 3:
+            shipping = session.get("shipping_data", [])
+            shipping.append(user_message)
+            session["shipping_data"] = shipping
+            if len(shipping) >= 3:
+                session["state"] = "CONFIRMING_ORDER"
 
-    elif (
-        state == "AWAITING_SHIPPING" and
-        (any(x in message_lower for x in shipping_keywords) or len(message_lower.split()) > 3)
-    ):
-        shipping = session.get("shipping_data", [])
-        shipping.append(user_message)
-        session["shipping_data"] = shipping
-        if len(shipping) >= 2:  # Se puede ajustar según lo que pidas
-            session["state"] = "CONFIRMING_ORDER"
-        state_changed = True
+    elif prev_state == "CONFIRMING_ORDER":
+        if any(x in message_lower for x in ["sí", "si", "confirmo", "ok", "dale"]):
+            session["state"] = "ORDER_CONFIRMED"
+        elif any(x in message_lower for x in ["no", "cancelar"]):
+            session["state"] = "CANCELLED"
 
-    # --- Si no cambió el estado ---
-    if not state_changed:
-        # Mantener el estado actual
-        session["state"] = state
-
-        # También podrías agregar un pequeño registro del mensaje “fuera de flujo”
-        extras = session.get("extra_messages", [])
-        extras.append(user_message)
-        # Guardar máximo 10 para evitar crecer sin límite
-        session["extra_messages"] = extras[-10:]
-
-    # Actualizar timestamp de última interacción
-    session["last_interaction"] = datetime.now().isoformat()
+    # 🧷 Si no detecta nada nuevo, mantener el estado anterior
+    if session["state"] == prev_state:
+        session["last_message"] = user_message
 
     await set_user_session(user_id, session)
     return session
+
 
 
 
@@ -125,12 +107,16 @@ async def clear_user_session(user_id: str):
 
 # ==== CONTEXTO DE CHAT ====
 async def add_chat_turn(user_id: str, message: str, role: str):
-    if redis_client:
-        key = f"context:{user_id}"
-        entry = json.dumps({"role": role, "message": message})
-        await redis_client.rpush(key, entry)
-        await redis_client.ltrim(key, -settings.MAX_CHAT_TURNS, -1)
-        await redis_client.expire(key, settings.SESSION_EXPIRE)
+    if redis_client is None:
+        print("⚠️ redis_client está vacío dentro de add_chat_turn")
+        return
+    key = f"context:{user_id}"
+    entry = json.dumps({"role": role, "message": message})
+    await redis_client.rpush(key, entry)
+    await redis_client.ltrim(key, -settings.MAX_CHAT_TURNS, -1)
+    await redis_client.expire(key, settings.SESSION_EXPIRE)
+    print(f"✅ Guardado en Redis -> {key}: {entry}")
+
 
 async def get_chat_context(user_id: str):
     if redis_client:
