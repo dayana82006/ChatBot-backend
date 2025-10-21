@@ -236,7 +236,7 @@ async def get_agent_response(user_id: str, user_message: str, channel: str = "we
     try:
 
          # 🧩 0️⃣ Registrar usuario nuevo si no existe en la base de datos 
-        await get_or_create_user(user_id, channel)
+        get_or_create_user(user_id, channel)
 
         # 1️⃣ Actualizar sesión con posible información de compra
         session = await update_purchase_session(user_id, user_message)
