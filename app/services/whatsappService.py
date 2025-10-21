@@ -4,6 +4,7 @@ from typing import Dict, Any
 from app.services.agent import get_agent_response
 from app.config import settings
 from app.services.websocketService import manager
+from app.services.redisServices import *
 
 logger = logging.getLogger(__name__)
 
@@ -42,6 +43,10 @@ async def process_whatsapp_message(payload: Dict[str, Any]) -> str:
         else:
             text = "Mensaje no soportado"
 
+        # ✅ CORRECCIÓN: obtener el contexto del chat correctamente
+        chat_context = await get_chat_context(from_number)
+        logger.info(f"🧠 Contexto actual del chat ({from_number}): {chat_context}")
+
         logger.info(f"📱 WhatsApp mensaje de {from_number}: {text}")
 
         # 🔥 NOTIFICAR MENSAJE DEL USUARIO POR WEBSOCKET
@@ -52,16 +57,16 @@ async def process_whatsapp_message(payload: Dict[str, Any]) -> str:
             text=text,
             channel="web"
         )
-        logger.debug(f"📡 Mensaje de usuario notificado via WebSocket")
+        logger.debug("📡 Mensaje de usuario notificado via WebSocket")
 
-        # Generar respuesta del agente
+        # 🤖 Generar respuesta del agente
         reply_text = await get_agent_response(
             user_id=from_number,
             user_message=text,
             channel="web"
         )
 
-        # Enviar respuesta por WhatsApp
+        # 💬 Enviar respuesta por WhatsApp
         await send_whatsapp_message(to=from_number, message=reply_text)
 
         # 🔥 NOTIFICAR RESPUESTA DEL ASISTENTE POR WEBSOCKET
@@ -72,22 +77,23 @@ async def process_whatsapp_message(payload: Dict[str, Any]) -> str:
             text=reply_text,
             channel="web"
         )
-        logger.debug(f"📡 Respuesta del asistente notificada via WebSocket")
+        logger.debug("📡 Respuesta del asistente notificada via WebSocket")
 
         logger.info(f"✅ Respuesta enviada a {from_number}")
         return reply_text
 
     except Exception as e:
-        logger.exception("Error procesando mensaje de WhatsApp")
+        logger.exception("❌ Error procesando mensaje de WhatsApp")
         if 'from_number' in locals():
             try:
                 await send_whatsapp_message(
                     to=from_number,
                     message="Disculpa, tengo problemas técnicos. Intenta nuevamente en unos momentos."
                 )
-            except:
-                pass
+            except Exception as e2:
+                logger.error(f"⚠️ Error enviando mensaje de error: {e2}")
         raise
+
 
 async def send_whatsapp_message(to: str, message: str):
     if not WHATSAPP_TOKEN or not GRAPH_URL:
