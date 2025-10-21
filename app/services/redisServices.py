@@ -3,6 +3,8 @@ import json
 import logging
 import redis.asyncio as redis
 from app.config import settings
+from app.queries.userQueries import get_user_by_id, create_user
+from app.queries.chatQueries import get_or_create_chat
 
 logger = logging.getLogger(__name__)
 
@@ -106,29 +108,29 @@ async def pop_message_queue(user_id: str):
 
 ## === SINCRONIZAR LA SESION 
 
-async def sync_user_session(user_id: str, channel: str):
+async def sync_user_session(user_id: str, channel: str = "web"):
     """
-    Sincroniza o crea la sesión del usuario en Redis.
+    Sincroniza sesión del usuario entre Redis y MySQL.
+    Si el usuario no existe en MySQL, lo crea.
     """
-    # Intenta obtener la sesión actual
     session = await get_user_session(user_id)
 
+    # Buscar o crear usuario en MySQL
+    user = get_user_by_id(user_id)
+    if not user:
+        user = create_user(user_id, channel)
+        logger.info(f"👤 Usuario {user_id} creado en MySQL")
+
+    # Crear sesión Redis si no existe
     if not session:
-        # Si no existe, crear una nueva sesión básica
         session = {
             "user_id": user_id,
             "channel": channel,
-            "state": "idle",
+            "chat_id": None,
             "context": [],
-            "purchase": {},
+            "conversation_started": False
         }
         await set_user_session(user_id, session)
-        logger.info(f"🆕 Nueva sesión creada para {user_id}")
-    else:
-        # Actualiza canal si cambió (opcional)
-        if session.get("channel") != channel:
-            session["channel"] = channel
-            await set_user_session(user_id, session)
-            logger.info(f"🔄 Canal actualizado para {user_id}: {channel}")
+        logger.info(f"🆕 Sesión Redis creada para {user_id}")
 
     return session
