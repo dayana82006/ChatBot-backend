@@ -4,6 +4,7 @@ from app.services.qdrant_service import search
 from app.queries.chatQueries import get_or_create_chat
 from app.queries.messageQueries import add_message, get_recent_messages_by_user
 from app.config import settings
+from app.queries.userQueries import get_or_create_user
 from app.services.redisServices import (
     get_user_session, set_user_session,
     get_chat_context, add_chat_turn,
@@ -233,6 +234,10 @@ async def get_agent_response(user_id: str, user_message: str, channel: str = "we
     Maneja contexto, sesión y flujo de compra.
     """
     try:
+
+         # 🧩 0️⃣ Registrar usuario nuevo si no existe en la base de datos 
+        await get_or_create_user(user_id, channel)
+
         # 1️⃣ Actualizar sesión con posible información de compra
         session = await update_purchase_session(user_id, user_message)
         purchase_state = session.get("state")
