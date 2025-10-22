@@ -49,3 +49,9 @@ tqdm==4.67.1
 # redis[async] (ya no existe)
 # protobuf==6.x (incompatible con Google SDK)
 # onnxruntime (si no usas modelos locales ONNX, puedes quitarla)
+
+
+langchain
+langchain-core
+langchain-google-genai
+langchain-qdrant
