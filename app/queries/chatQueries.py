@@ -45,26 +45,65 @@ def get_chat(chat_id: int) -> Optional[Dict[str, Any]]:
         cursor.close()
         conn.close()
 
-def get_or_create_chat(user_id: str, channel: str = "web") -> int:
-    """Obtiene el chat existente o crea uno nuevo, y crea el usuario si no existe."""
+def get_or_create_chat(
+    user_id: str,
+    channel: str = "web",
+    name: Optional[str] = None,
+    email: Optional[str] = None,
+    phone: Optional[str] = None
+) -> int:
+    """
+    Obtiene el chat existente o crea uno nuevo, y crea el usuario si no existe.
+    Si se proveen datos opcionales (nombre, email, teléfono), se guardan o actualizan.
+    """
     conn = get_connection()
     cursor = conn.cursor(dictionary=True)
     try:
         # 1️⃣ Verificar si el usuario existe
-        cursor.execute("SELECT id FROM users WHERE id = %s", (user_id,))
+        cursor.execute("SELECT id FROM users WHERE user_id = %s", (user_id,))
         user = cursor.fetchone()
+
         if not user:
-            cursor.execute("INSERT INTO users (id) VALUES (%s)", (user_id,))
+            # Crear usuario nuevo con la información disponible
+            cursor.execute(
+                """
+                INSERT INTO users (user_id, name, email, phone, channel)
+                VALUES (%s, %s, %s, %s, %s)
+                """,
+                (user_id, name, email, phone, channel)
+            )
             conn.commit()
             logger.info(f"🧍 Usuario creado automáticamente: {user_id}")
+        else:
+            # Si el usuario ya existe, actualizar sus datos si llegan nuevos
+            updates = []
+            params = {}
+            if name:
+                updates.append("name = %(name)s")
+                params["name"] = name
+            if email:
+                updates.append("email = %(email)s")
+                params["email"] = email
+            if updates:
+                params["user_id"] = user_id
+                update_sql = f"UPDATE users SET {', '.join(updates)}, updated_at = CURRENT_TIMESTAMP WHERE user_id = %(user_id)s"
+                cursor.execute(update_sql, params)
+                conn.commit()
+                logger.info(f"🔄 Usuario actualizado: {user_id}")
 
-        # 2️⃣ Verificar si ya hay un chat previo del usuario
+        # 2️⃣ Buscar chat existente del usuario en ese canal
         cursor.execute(
-            "SELECT id FROM chats WHERE user_id = %s AND channel = %s ORDER BY updated_at DESC LIMIT 1",
+            """
+            SELECT id FROM chats 
+            WHERE user_id = %s AND channel = %s 
+            ORDER BY updated_at DESC LIMIT 1
+            """,
             (user_id, channel)
         )
         chat = cursor.fetchone()
+
         if chat:
+            logger.debug(f"💬 Chat existente encontrado: {chat['id']} para usuario {user_id}")
             return chat["id"]
 
         # 3️⃣ Crear nuevo chat
@@ -75,6 +114,7 @@ def get_or_create_chat(user_id: str, channel: str = "web") -> int:
         conn.commit()
         chat_id = cursor.lastrowid
         logger.info(f"💬 Nuevo chat creado: chat_id={chat_id}, user_id={user_id}, channel={channel}")
+
         return chat_id
 
     except Exception as e:
@@ -83,6 +123,7 @@ def get_or_create_chat(user_id: str, channel: str = "web") -> int:
     finally:
         cursor.close()
         conn.close()
+
 
 
 def get_all_chats_with_summary(

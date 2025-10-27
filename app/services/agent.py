@@ -10,6 +10,9 @@ from app.services.redisServices import (
     push_message_queue, pop_message_queue,
     clear_user_session, clear_chat_context
 )
+from typing import Optional
+
+
 logger = logging.getLogger(__name__)
 
 try:
@@ -227,10 +230,17 @@ def remove_greeting_from_response(response: str) -> str:
     
     return response
 
-async def get_agent_response(user_id: str, user_message: str, channel: str = "web") -> str:
+async def get_agent_response(
+    user_id: str,
+    user_message: str,
+    channel: str = "web",
+    name: Optional[str] = None,
+    email: Optional[str] = None,
+    phone: Optional[str] = None
+) -> str:
     """
     Genera respuesta del agente usando Redis, RAG y Gemini.
-    Maneja contexto, sesión y cola de mensajes.
+    Sincroniza los datos con MySQL (usuarios, chats y mensajes).
     """
     try:
         # 1️⃣ Agregar mensaje del usuario a la cola
@@ -250,7 +260,7 @@ async def get_agent_response(user_id: str, user_message: str, channel: str = "we
         is_first_interaction = is_first_conversation(chat_context)
         logger.info(f"Primera interacción: {is_first_interaction}, Historial: {len(chat_context)} mensajes")
 
-        # 4️⃣ Buscar información relevante en Qdrant
+        # 4️⃣ Buscar información relevante en Qdrant (RAG)
         fragments = await search(
             query=message_to_process,
             top_k=settings.RAG_TOP_K,
@@ -263,7 +273,7 @@ async def get_agent_response(user_id: str, user_message: str, channel: str = "we
         # 5️⃣ Construir contexto de conversación
         recent_context_text = build_conversation_context(chat_context)
 
-        # 6️⃣ Instrucción especial para evitar saludos
+        # 6️⃣ Evitar saludos innecesarios
         no_greeting_instruction = ""
         if not is_first_interaction:
             no_greeting_instruction = (
@@ -288,34 +298,46 @@ async def get_agent_response(user_id: str, user_message: str, channel: str = "we
             f"Usa emojis para destacar información importante."
         )
 
-        # 8️⃣ Generar respuesta con Gemini o fallback
+        # 8️⃣ Generar respuesta (Gemini o fallback)
         if GEMINI_AVAILABLE and settings.GEMINI_API_KEY and settings.USE_GEMINI:
             response = await generate_with_gemini(prompt, message_to_process)
         else:
             response = generate_fallback_response(message_to_process, kb_context)
 
-        # 9️⃣ Limpiar saludos de la respuesta (medida de seguridad)
-        if not is_first_interaction:
-            # Si detectamos saludo en conversación continua, removerlo
-            if extract_greeting_patterns(response):
-                logger.warning(f"⚠️ Saludo detectado en respuesta para {user_id}, removiendo...")
-                response = remove_greeting_from_response(response)
-        
-                # 🧾 10️⃣ Persistir en MySQL
-        chat_id = get_or_create_chat(user_id, channel)
-        add_message(chat_id, "user", user_message)
-        add_message(chat_id, "assistant", response)
+        # 9️⃣ Limpiar saludos (seguridad)
+        if not is_first_interaction and extract_greeting_patterns(response):
+            logger.warning(f"⚠️ Saludo detectado en respuesta para {user_id}, removiendo...")
+            response = remove_greeting_from_response(response)
 
+        # 🔟 Guardar datos en MySQL (usuario, chat, mensajes)
+        try:
+            from app.queries.chatQueries import get_or_create_chat
+            from app.queries.messageQueries import add_message
 
-        # 🔟 Guardar en Redis los turnos y la sesión
-        await add_chat_turn(user_id, message_to_process, "user")
+            chat_id = get_or_create_chat(
+                user_id=user_id,
+                channel=channel,
+                name=name,
+                email=email,
+                phone=phone
+            )
+
+            add_message(chat_id, "user", user_message)
+            add_message(chat_id, "assistant", response)
+
+            logger.info(f"💾 Datos guardados en MySQL para {user_id} (chat_id={chat_id})")
+        except Exception as db_error:
+            logger.error(f"❌ Error guardando en MySQL: {db_error}")
+
+        # 1️⃣1️⃣ Guardar también en Redis (sesión y contexto)
+        await add_chat_turn(user_id, user_message, "user")
         await add_chat_turn(user_id, response, "assistant")
 
         session["last_message"] = user_message
         session["conversation_started"] = True
         await set_user_session(user_id, session)
 
-        logger.info(f"✅ Respuesta generada y guardada para {user_id}: {response[:80]}...")
+        logger.info(f"✅ Respuesta generada y sincronizada para {user_id}: {response[:80]}...")
         return response
 
     except Exception as e:
