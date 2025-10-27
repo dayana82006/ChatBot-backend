@@ -300,16 +300,22 @@ async def get_agent_response(user_id: str, user_message: str, channel: str = "we
             if extract_greeting_patterns(response):
                 logger.warning(f"⚠️ Saludo detectado en respuesta para {user_id}, removiendo...")
                 response = remove_greeting_from_response(response)
+        
+                # 🧾 10️⃣ Persistir en MySQL
+        chat_id = get_or_create_chat(user_id, channel)
+        add_message(chat_id, "user", user_message)
+        add_message(chat_id, "assistant", response)
+
 
         # 🔟 Guardar en Redis los turnos y la sesión
         await add_chat_turn(user_id, message_to_process, "user")
         await add_chat_turn(user_id, response, "assistant")
 
-        session["last_message"] = message_to_process
+        session["last_message"] = user_message
         session["conversation_started"] = True
         await set_user_session(user_id, session)
 
-        logger.info(f"✅ Respuesta generada para {user_id}: {response[:80]}...")
+        logger.info(f"✅ Respuesta generada y guardada para {user_id}: {response[:80]}...")
         return response
 
     except Exception as e:
