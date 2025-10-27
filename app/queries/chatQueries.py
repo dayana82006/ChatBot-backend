@@ -46,11 +46,43 @@ def get_chat(chat_id: int) -> Optional[Dict[str, Any]]:
         conn.close()
 
 def get_or_create_chat(user_id: str, channel: str = "web") -> int:
-    """Obtiene el chat existente o crea uno nuevo"""
-    chat = get_chat_by_user(user_id, channel)
-    if chat:
-        return chat['id']
-    return create_chat(user_id, channel)
+    """Obtiene el chat existente o crea uno nuevo, y crea el usuario si no existe."""
+    conn = get_connection()
+    cursor = conn.cursor(dictionary=True)
+    try:
+        # 1️⃣ Verificar si el usuario existe
+        cursor.execute("SELECT id FROM users WHERE id = %s", (user_id,))
+        user = cursor.fetchone()
+        if not user:
+            cursor.execute("INSERT INTO users (id) VALUES (%s)", (user_id,))
+            conn.commit()
+            logger.info(f"🧍 Usuario creado automáticamente: {user_id}")
+
+        # 2️⃣ Verificar si ya hay un chat previo del usuario
+        cursor.execute(
+            "SELECT id FROM chats WHERE user_id = %s AND channel = %s ORDER BY updated_at DESC LIMIT 1",
+            (user_id, channel)
+        )
+        chat = cursor.fetchone()
+        if chat:
+            return chat["id"]
+
+        # 3️⃣ Crear nuevo chat
+        cursor.execute(
+            "INSERT INTO chats (user_id, channel) VALUES (%s, %s)",
+            (user_id, channel)
+        )
+        conn.commit()
+        chat_id = cursor.lastrowid
+        logger.info(f"💬 Nuevo chat creado: chat_id={chat_id}, user_id={user_id}, channel={channel}")
+        return chat_id
+
+    except Exception as e:
+        logger.error(f"❌ Error en get_or_create_chat: {e}")
+        raise
+    finally:
+        cursor.close()
+        conn.close()
 
 
 def get_all_chats_with_summary(
