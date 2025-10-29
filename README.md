@@ -98,11 +98,14 @@ source .venv/bin/activate
    pip install -r requirements.txt
    ```
 
-**Ejecutar Proyecto** 
+**Ejecutar Solo el Backend** 
    ```bash
     uvicorn app.main:app --reload --port 8000
    ```
-
+**Ejecutar todo el proyecto con docker**
+```bash
+    docker-compose up --build
+   ```
 ### 3. Variables de Entorno
 
 Crear archivo `.env` en la raíz:
@@ -150,18 +153,11 @@ docker run -p 6333:6333 qdrant/qdrant
 # Ejecutar script schema.sql en tu cliente MySQL
 
 # Cargar base de conocimiento
-python scripts/load_kb.py
+python3 scripts/load_kb.py
 ```
 
-### 5. Ejecutar la Aplicación
 
-**Backend:**
-```bash
-cd backend
-uvicorn app.main:app --reload --port 8000
-```
-
-### 6. Ejecutar la Ngrok para configuracion del webhook en Meta
+### 5. Ejecutar la Ngrok para configuracion del webhook en Meta
 
 **Backend:**
 ```bash
@@ -172,14 +168,6 @@ ngrok http 8000
 
 ## 🔧 APIs y Endpoints
 
-### Chat HTTP
-```bash
-POST /chat/
-{
-  "message": "¿Qué tipos de café tienen?",
-  "user_id": "demo_user"
-}
-```
 
 ### WhatsApp Webhook
 ```bash

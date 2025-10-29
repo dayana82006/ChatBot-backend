@@ -9,6 +9,13 @@ def create_chat(user_id: str, channel: str = "web") -> int:
     conn = get_connection()
     cursor = conn.cursor()
     try:
+        # PRIMERO: Asegurarnos de que el usuario existe en la tabla users
+        cursor.execute(
+            "INSERT IGNORE INTO users (user_id, channel) VALUES (%s, %s)", 
+            (user_id, channel)
+        )
+        
+        # LUEGO: Crear el chat
         cursor.execute(
             "INSERT INTO chats (user_id, channel) VALUES (%s, %s)", 
             (user_id, channel)
@@ -51,7 +58,6 @@ def get_or_create_chat(user_id: str, channel: str = "web") -> int:
     if chat:
         return chat['id']
     return create_chat(user_id, channel)
-
 
 def get_all_chats_with_summary(
     page: int = 1,

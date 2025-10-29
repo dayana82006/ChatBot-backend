@@ -3,9 +3,9 @@ from pydantic import BaseModel, Field
 from typing import List, Optional
 import datetime
 import logging
-from app.queries.chatQueries import get_all_chats_with_summary
+from app.queries.chatQueries import get_all_chats_with_summary, get_chat_by_user
 from app.queries.messageQueries import get_messages_by_chat
-from app.queries.chatQueries import get_chat_by_user
+from app.queries.orderQueries import get_orders_by_user
 from app.services.redisServices import get_chat_context 
 
 router = APIRouter(prefix="/admin", tags=["Admin"])
@@ -33,6 +33,18 @@ class ChatDetailResponse(BaseModel):
     user_id: str = Field(..., description="ID del usuario")
     channel: str = Field(..., description="Canal de comunicación")
     messages: List[ChatMessage] = Field(..., description="Lista de mensajes")
+
+class OrderDetail(BaseModel):
+    product_name: str = Field(..., description="Nombre del producto")
+    quantity: int = Field(..., description="Cantidad")
+    unit_price: float = Field(..., description="Precio unitario")
+    metadata: Optional[dict] = Field(None, description="Metadatos adicionales")
+
+class OrderResponse(BaseModel):
+    id: int = Field(..., description="ID del pedido")
+    total: float = Field(..., description="Total del pedido")
+    created_at: datetime.datetime = Field(..., description="Fecha de creación")
+    details: List[OrderDetail] = Field(..., description="Detalles del pedido")
 
 # ✅ Nuevo endpoint: lista todos los chats con sus mensajes
 @router.get("/chats/", summary="Lista todos los chats con sus mensajes")
@@ -78,41 +90,60 @@ async def list_all_chats_with_messages():
         logger.exception(f"Error listing all chats with messages: {e}")
         raise HTTPException(status_code=500, detail="Error interno del servidor")
 
-
-
 @router.get("/chats/{user_id}", response_model=ChatDetailResponse, summary="Detalle de chat específico")
 async def get_chat_detail(
     user_id: str,
-    channel: str = Query("web", description="Canal del chat")
+    channel: str = Query("web", description="Canal del chat"),
+    source: str = Query("mysql", description="Fuente de datos: mysql o redis")
 ):
     """
-    Obtiene el historial completo de mensajes de un chat específico desde Redis.
+    Obtiene el historial completo de mensajes de un chat específico.
     
     - **user_id**: ID del usuario
     - **channel**: Canal de comunicación (web, whatsapp, telegram)
+    - **source**: Fuente de datos (mysql para persistencia completa, redis para contexto actual)
     """
     try:
-        logger.info(f"Admin: Getting chat detail for user_id={user_id}, channel={channel}")
+        logger.info(f"Admin: Getting chat detail for user_id={user_id}, channel={channel}, source={source}")
 
-        # 🔹 Obtenemos los mensajes del contexto de Redis
-        chat_context = await get_chat_context(user_id)
+        if source == "redis":
+            # 🔹 Obtenemos los mensajes del contexto de Redis (sesión actual)
+            chat_context = await get_chat_context(user_id)
 
-        if not chat_context:
-            raise HTTPException(
-                status_code=404,
-                detail=f"No hay mensajes guardados en Redis para user_id={user_id}"
-            )
-
-        # 🔹 Convertimos los mensajes al modelo ChatMessage
-        chat_messages = []
-        for item in chat_context:
-            chat_messages.append(
-                ChatMessage(
-                    role=item.get("role", "user"),
-                    text=item.get("message", ""),
-                    timestamp=datetime.datetime.now()  # Redis no guarda timestamp
+            if not chat_context:
+                raise HTTPException(
+                    status_code=404,
+                    detail=f"No hay mensajes guardados en Redis para user_id={user_id}"
                 )
-            )
+
+            # 🔹 Convertimos los mensajes al modelo ChatMessage
+            chat_messages = []
+            for item in chat_context:
+                chat_messages.append(
+                    ChatMessage(
+                        role=item.get("role", "user"),
+                        text=item.get("message", ""),
+                        timestamp=datetime.datetime.now()  # Redis no guarda timestamp
+                    )
+                )
+        else:
+            # 🔹 Obtenemos los mensajes de MySQL (historial completo persistente)
+            chat = get_chat_by_user(user_id, channel)
+            if not chat:
+                raise HTTPException(
+                    status_code=404,
+                    detail=f"No hay chat para user_id={user_id} en MySQL"
+                )
+
+            messages = get_messages_by_chat(chat['id'])
+            chat_messages = [
+                ChatMessage(
+                    role=msg['role'],
+                    text=msg['text'],
+                    timestamp=msg['timestamp']
+                )
+                for msg in messages
+            ]
 
         # 🔹 Devolvemos la respuesta compatible con el frontend
         return ChatDetailResponse(
@@ -125,6 +156,41 @@ async def get_chat_detail(
         raise
     except Exception as e:
         logger.exception(f"Error getting chat detail: {e}")
+        raise HTTPException(status_code=500, detail="Error interno del servidor")
+
+@router.get("/chats/{user_id}/orders", summary="Órdenes del usuario")
+async def get_user_orders(user_id: str):
+    """Obtiene el historial de órdenes de un usuario"""
+    try:
+        orders_data = get_orders_by_user(user_id)
+        
+        # Agrupar detalles por pedido
+        orders_dict = {}
+        for item in orders_data:
+            order_id = item['id']
+            if order_id not in orders_dict:
+                orders_dict[order_id] = {
+                    'id': order_id,
+                    'total': float(item['total']),
+                    'created_at': item['creado_en'],
+                    'details': []
+                }
+            
+            # Agregar detalle del producto
+            if item['producto_nombre']:
+                detail = OrderDetail(
+                    product_name=item['producto_nombre'],
+                    quantity=item['cantidad'],
+                    unit_price=float(item['precio_unitario']),
+                    metadata=item['detalle_metadata']
+                )
+                orders_dict[order_id]['details'].append(detail)
+        
+        orders_list = list(orders_dict.values())
+        return {"user_id": user_id, "orders": orders_list}
+        
+    except Exception as e:
+        logger.exception(f"Error getting user orders: {e}")
         raise HTTPException(status_code=500, detail="Error interno del servidor")
 
 @router.get("/stats", summary="Estadísticas generales")

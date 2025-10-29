@@ -45,7 +45,6 @@ def execute_schema():
         conn = get_connection()
         cursor = conn.cursor()
         
-        # Crear tablas si no existen
         schema_sql = """
         -- =====================================================
         -- TABLA: users (información adicional)
@@ -90,9 +89,7 @@ def execute_schema():
             id INT AUTO_INCREMENT PRIMARY KEY,
             user_id VARCHAR(255) NOT NULL COMMENT 'ID del usuario que realizó el pedido',
             total DECIMAL(10, 2) NOT NULL COMMENT 'Total del pedido',
-            estado VARCHAR(50) DEFAULT 'pendiente' COMMENT 'Estado del pedido (pendiente, procesado, etc.)',
             creado_en DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT 'Fecha de creación del pedido',
-            actualizado_en DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT 'Última actualización del pedido',
             FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='Pedidos realizados por los usuarios';
 
@@ -149,3 +146,32 @@ def execute_schema():
     except Exception as e:
         logger.error(f"❌ Error ejecutando schema: {e}")
         raise e
+
+def add_metadata_column_to_pedido_detalles():
+    """Agrega la columna metadata a pedido_detalles si no existe"""
+    try:
+        conn = get_connection()
+        cursor = conn.cursor()
+        
+        # Verificar si la columna metadata existe
+        cursor.execute("""
+            SELECT COUNT(*) FROM information_schema.COLUMNS 
+            WHERE TABLE_SCHEMA = DATABASE() 
+            AND TABLE_NAME = 'pedido_detalles' 
+            AND COLUMN_NAME = 'metadata'
+        """)
+        
+        if cursor.fetchone()[0] == 0:
+            # Agregar la columna si no existe
+            cursor.execute("""
+                ALTER TABLE pedido_detalles 
+                ADD COLUMN metadata JSON DEFAULT NULL COMMENT 'Información adicional como tipo de molido'
+            """)
+            logger.info("✅ Columna metadata agregada a pedido_detalles")
+        else:
+            logger.info("✅ Columna metadata ya existe en pedido_detalles")
+            
+        cursor.close()
+        conn.close()
+    except Exception as e:
+        logger.error(f"❌ Error agregando columna metadata: {e}")

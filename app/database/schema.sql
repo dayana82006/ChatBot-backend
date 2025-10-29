@@ -50,9 +50,7 @@ CREATE TABLE IF NOT EXISTS pedidos (
     id INT AUTO_INCREMENT PRIMARY KEY,
     user_id VARCHAR(255) NOT NULL COMMENT 'ID del usuario que realizó el pedido',
     total DECIMAL(10, 2) NOT NULL COMMENT 'Total del pedido',
-    estado VARCHAR(50) DEFAULT 'pendiente' COMMENT 'Estado del pedido (pendiente, procesado, etc.)',
     creado_en DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT 'Fecha de creación del pedido',
-    actualizado_en DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT 'Última actualización del pedido',
     FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='Pedidos realizados por los usuarios';
 
