@@ -90,12 +90,11 @@ def add_or_update_order_detail(pedido_id: int, producto_id, cantidad: int, preci
     cursor = conn.cursor()
 
     try:
-        # 1. Búsqueda por nombre y manejo de errores (si el input es un string no numérico)
+        # 1. Búsqueda y validación si el producto_id vino como string
         if isinstance(producto_id, str):
             if not producto_id.isdigit():
                 producto_real_id = get_producto_by_name(producto_id)
                 if not producto_real_id:
-                    # 💥 LANZAR ERROR: Solución al fallo silencioso y al 1452
                     raise ValueError(f"Producto '{producto_id}' no se encontró en el catálogo.")
                 producto_id = producto_real_id
             
@@ -103,8 +102,11 @@ def add_or_update_order_detail(pedido_id: int, producto_id, cantidad: int, preci
         try:
             producto_id = int(producto_id)
         except (TypeError, ValueError):
-            # 💥 LANZAR ERROR: Si el ID es None o no numérico
+            # Esto maneja casos donde 'producto_id' es None
             raise ValueError(f"ID de producto no válido o nulo: {producto_id}")
+
+        # 🚨 LÍNEA CLAVE DE DEBUG: Muestra el ID final antes de la BD
+        logger.debug(f"DEBUG: Insertando/Actualizando Detalle: Pedido ID={pedido_id}, Producto ID={producto_id}, Cantidad={cantidad}")
 
         # 🟢 Verificar si el detalle ya existe
         cursor.execute("""
@@ -115,7 +117,7 @@ def add_or_update_order_detail(pedido_id: int, producto_id, cantidad: int, preci
         detalle = cursor.fetchone()
 
         if detalle:
-            # Lógica de UPDATE (suma la nueva cantidad, que puede ser negativa para restar)
+            # Lógica de UPDATE
             nueva_cantidad = detalle[1] + cantidad
             cursor.execute("""
                 UPDATE pedido_detalles
@@ -123,7 +125,7 @@ def add_or_update_order_detail(pedido_id: int, producto_id, cantidad: int, preci
                 WHERE id = %s
             """, (nueva_cantidad, detalle[0]))
         else:
-            # Lógica de INSERT
+            # Lógica de INSERT (Aquí es donde falla la clave foránea)
             cursor.execute("""
                 INSERT INTO pedido_detalles (pedido_id, producto_id, cantidad, precio_unitario)
                 VALUES (%s, %s, %s, %s)
@@ -131,13 +133,10 @@ def add_or_update_order_detail(pedido_id: int, producto_id, cantidad: int, preci
 
         conn.commit()
     except ValueError:
-        # Propagar el ValueError (producto no encontrado / ID inválido)
         raise
     except Exception as e:
-        # Capturar cualquier otro error de BD
         logger.error(f"Error de BD en add_or_update_order_detail: {e}")
         conn.rollback()
-        # Se relanza el error para que el agente pueda manejarlo
         raise
     finally:
         cursor.close()
