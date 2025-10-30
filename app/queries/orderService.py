@@ -107,7 +107,8 @@ def add_or_update_order_detail(pedido_id: int, producto_id, cantidad: int, preci
 
         # 🚨 LÍNEA CLAVE DE DEBUG: Muestra el ID final antes de la BD
         logger.debug(f"DEBUG: Insertando/Actualizando Detalle: Pedido ID={pedido_id}, Producto ID={producto_id}, Cantidad={cantidad}")
-
+        # 🚨 ESTA LÍNEA DEBE ESTAR AHÍ PARA MOSTRAR EL VALOR FINAL
+        logger.debug(f"DEBUG FINAL: Pedido ID={pedido_id}, Producto ID={producto_id}, Cantidad={cantidad}")
         # 🟢 Verificar si el detalle ya existe
         cursor.execute("""
             SELECT id, cantidad FROM pedido_detalles
