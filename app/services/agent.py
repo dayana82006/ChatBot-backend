@@ -345,6 +345,8 @@ def handle_order_flow(user_id: str, intent: str, user_message: str) -> str:
             
             if producto:
                 producto_id, precio = producto
+                # 🚨 AGREGAR ESTA LÍNEA AQUÍ
+                logger.debug(f"ID extraído por Python: {producto_id}. Precio: {precio}")
                 
                 try:
                     # 🟢 Añadimos 1 unidad inicialmente. El producto_id es el entero correcto (ej. 2)
