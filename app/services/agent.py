@@ -14,11 +14,13 @@ from app.queries.orderService import (
     get_or_create_pending_order,
     add_or_update_order_detail,
     update_order_status,
-    get_order_summary
+    get_order_summary,
+    get_last_product_detail, # ⬅️ CLAVE para recuperar el producto
+    delete_order              # ⬅️ Para la limpieza en caso de error grave
 )
+import re
 
 
-from app.queries.orderService import add_or_update_order_detail, update_order_status, delete_order # Asegúrate de importar delete_order
 logger = logging.getLogger(__name__)
 
 # ======================================================
@@ -188,33 +190,62 @@ def detect_intent(text: str) -> str:
         return "seleccionar_cantidad"
     return "general"
 
-def extraer_numero(text: str) -> int:
-    import re
-    m = re.search(r"\d+", text)
-    return int(m.group()) if m else 1
+def extraer_numero(user_message: str) -> int:
+    """Extrae el primer número entero del mensaje."""
+    match = re.search(r'\d+', user_message)
+    # Valor por defecto 1 si no encuentra número
+    return int(match.group()) if match else 1 
 
-def obtener_producto_desde_texto(text: str):
-    productos = {
-        "huila": (1, 18000),
-        "nariño": (2, 19000),
-        "tolima": (3, 18500),
-        "clásico": (4, 15000),
-        "descafeinado": (5, 20000)
-    }
-    for k, v in productos.items():
-        if k in text:
-            return v
+# =================================================================
+# 🛑 SINCRONIZACIÓN DE IDs con la Base de Datos (1-11) 🛑
+# =================================================================
+def obtener_producto_desde_texto(user_message: str):
+    """
+    Función auxiliar para obtener (producto_id, precio) basado en el mensaje.
+    Los IDs y precios COINCIDEN con la tabla de productos proporcionada (usando el precio de 250g/unidad base).
+    """
+    message = user_message.lower()
+    
+    # Mapeo de productos a sus IDs reales y precio base (250g o unidad)
+    if 'clasico' in message or 'clásico' in message:
+        return (1, 25000.00) # ID 1 (Caf Clásico)
+    elif 'huila' in message or 'premium' in message:
+        return (2, 38000.00) # ID 2 (Caf Premium Huila)
+    elif 'nariño' in message or 'narino' in message or 'orgánico' in message:
+        return (3, 42000.00) # ID 3 (Caf Nariño Orgánico)
+    elif 'tolima' in message or 'intenso' in message:
+        return (4, 35000.00) # ID 4 (Caf Tolima Intenso)
+    elif 'sierra nevada' in message:
+        return (5, 36000.00) # ID 5 (Caf Sierra Nevada)
+    elif 'antioquia' in message or 'reserva' in message:
+        return (6, 33000.00) # ID 6 (Caf Antioquia Reserva)
+    elif 'descafeinado' in message:
+        return (7, 30000.00) # ID 7 (Caf Descafeinado)
+    elif 'edicion especial' in message or 'limitada' in message:
+        return (8, 95000.00) # ID 8 (Edición Especial Limitada)
+    elif 'cold brew' in message or 'frio' in message:
+        return (9, 12000.00) # ID 9 (Cold Brew 350ml)
+    elif 'cápsulas' in message or 'nespresso' in message:
+        return (10, 22000.00) # ID 10 (Cápsulas Nespresso 10 unidades)
+    elif 'chocolate' in message or 'artesanal' in message:
+        return (11, 15000.00) # ID 11 (Chocolate Artesanal)
+    
     return None
 
-def generar_resumen(detalles: List[Dict[str, Any]]) -> str:
-    texto = "📋 Resumen de tu pedido:\n\n"
+
+def generar_resumen(detalles: list) -> str:
+    """Genera un resumen de texto del pedido a partir de los detalles."""
+    if not detalles:
+        return "El pedido está vacío."
+    summary = "Tu resumen de pedido:\n"
     total = 0
-    for d in detalles:
-        subtotal = d["cantidad"] * float(d["precio_unitario"])
-        texto += f"- Producto #{d['producto_id']}: {d['cantidad']} x ${d['precio_unitario']} = ${subtotal}\n"
+    for item in detalles:
+        # Nota: Usamos round(valor) para asegurar que se muestre como entero si es el caso
+        subtotal = item['cantidad'] * item['precio_unitario']
+        summary += f"- {item['cantidad']}x {item['producto_nombre']} (${item['precio_unitario']:,.2f} COP c/u)\n"
         total += subtotal
-    texto += f"\n💰 Total: ${total}\n¿Deseas confirmar tu pedido? (sí / no)"
-    return texto
+    summary += f"\nTotal: ${total:,.2f} COP"
+    return summary
 
     # otras funciones auxiliares
 
@@ -298,81 +329,95 @@ def remove_greeting_from_response(response: str) -> str:
 
 def handle_order_flow(user_id: str, intent: str, user_message: str) -> str:
     """
-    Controla el flujo completo de pedidos paso a paso, con manejo de transacciones.
+    Controla el flujo completo de pedidos paso a paso.
     """
-    # 1. Obtener o crear el pedido pendiente
-    pedido_id = get_or_create_pending_order(user_id) 
+    pedido_id = None # Inicializar para asegurar que esté en el scope del 'except' global
+    try:
+        # 1. Obtener o crear el pedido pendiente
+        pedido_id = get_or_create_pending_order(user_id) 
 
-    if intent == "hacer_pedido":
-        update_order_status(pedido_id, "BROWSING")
-        return "Perfecto ☕ ¿Qué tipo de café deseas? Tenemos Huila, Nariño, Tolima, Clásico y Descafeinado."
+        if intent == "hacer_pedido":
+            update_order_status(pedido_id, "BROWSING")
+            return "Perfecto ☕ ¿Qué tipo de café deseas? Tenemos Clásico, Huila, Nariño, Tolima y Descafeinado."
 
-    elif intent == "seleccionar_producto":
-        producto = obtener_producto_desde_texto(user_message)
-        if producto:
-            producto_id, precio = producto
+        elif intent == "seleccionar_producto":
+            producto = obtener_producto_desde_texto(user_message)
+            
+            if producto:
+                producto_id, precio = producto
+                
+                try:
+                    # 🟢 Añadimos 1 unidad inicialmente. El producto_id es el entero correcto (ej. 2)
+                    add_or_update_order_detail(pedido_id, producto_id, cantidad=1, precio_unitario=precio)
+                    
+                    update_order_status(pedido_id, "AWAITING_QUANTITY")
+                    
+                    return f"Excelente elección 😋 ¿Cuántas unidades deseas de este producto?"
+
+                except ValueError as e:
+                    # 🚨 Maneja el error de producto no encontrado o ID inválido
+                    error_msg = str(e)
+                    logger.warning(f"Error en selección de producto para pedido {pedido_id}: {error_msg}")
+                    return f"Lo siento, parece que {error_msg}. ¿Podrías intentar con otro nombre?"
+                
+            else:
+                return "No entendí qué tipo de café deseas. ¿Podrías repetirlo?"
+
+        elif intent == "seleccionar_cantidad":
+            cantidad_deseada = extraer_numero(user_message)
+            
+            if cantidad_deseada <= 0:
+                 return "Por favor, ingresa una cantidad válida (mayor que cero)."
+            
+            # 💡 Recuperación de Estado: Obtener el último producto añadido
+            detalle = get_last_product_detail(pedido_id)
+            
+            if not detalle:
+                # El usuario saltó el paso o el pedido está vacío.
+                update_order_status(pedido_id, "BROWSING")
+                return "Parece que no has seleccionado ningún producto aún. ¿Cuál deseas agregar?"
+            
+            ultimo_producto_id = detalle['producto_id']
+            ultimo_precio = detalle['precio_unitario']
+            cantidad_actual = detalle['cantidad'] # ⬅️ Obtenemos la cantidad actual (probablemente 1)
+            
+            # 💡 Lógica de Corrección: Calcular la diferencia necesaria
+            # Si actual es 1 y desea 5, la diferencia es 4. Si desea 0, la diferencia es -1.
+            cantidad_a_añadir = cantidad_deseada - cantidad_actual
             
             try:
-                # 💥 Envolvemos la llamada en try/except
-                add_or_update_order_detail(pedido_id, producto_id, cantidad=1, precio_unitario=precio)
-                update_order_status(pedido_id, "AWAITING_QUANTITY")
+                # 💥 Actualizamos el detalle sumando la diferencia (delta).
+                add_or_update_order_detail(
+                    pedido_id, 
+                    producto_id=ultimo_producto_id, 
+                    cantidad=cantidad_a_añadir, 
+                    precio_unitario=ultimo_precio
+                )
                 
-                # 💡 Ahora podemos continuar con seguridad
-                return f"Excelente elección 😋 ¿Cuántas unidades deseas?"
-
-            except ValueError as e:
-                # 🚨 El producto no existe o el ID es nulo.
-                error_msg = str(e)
-                # 💡 Limpieza de transacción: Eliminar el pedido si se creó sin detalles
-                # Esto es opcional, pero previene pedidos vacíos.
-                # Nota: Si el pedido ya tenía detalles, esta línea podría ser problemática. 
-                # Se recomienda una lógica más avanzada para pedidos ya iniciados.
-                # Por ahora, solo respondemos el error:
-                return f"Lo siento, parece que {error_msg}. ¿Podrías intentar con otro nombre?"
+                update_order_status(pedido_id, "AWAITING_CONFIRMATION")
+                return f"Perfecto, has ajustado el pedido a {cantidad_deseada} unidades. ¿Deseas ver el resumen antes de confirmar?"
             
+            except ValueError as e:
+                return f"Ocurrió un error al actualizar la cantidad: {str(e)}"
+
+        elif intent == "confirmar_pedido":
+            update_order_status(pedido_id, "COMPLETED")
+            detalles = get_order_summary(pedido_id)
+            return generar_resumen(detalles) + "\n\n✅ ¡Tu pedido ha sido confirmado! 🚚"
+
         else:
-            return "No entendí qué tipo de café deseas. ¿Podrías repetirlo?"
-
-    elif intent == "seleccionar_cantidad":
-        cantidad = extraer_numero(user_message)
-        
-        if cantidad <= 0:
-             return "Por favor, ingresa una cantidad válida (mayor que cero)."
-        
-        # 💡 Recuperación de Estado: Obtener el último producto añadido
-        detalle = get_last_product_detail(pedido_id)
-        
-        if not detalle:
-            # El usuario saltó el paso de 'seleccionar_producto'.
-            update_order_status(pedido_id, "BROWSING")
-            return "Parece que no has seleccionado ningún producto aún. ¿Cuál deseas agregar?"
-        
-        ultimo_producto_id = detalle['producto_id']
-        ultimo_precio = detalle['precio_unitario']
-
-        try:
-            # 💥 Usar el producto_id y precio recuperados
-            add_or_update_order_detail(
-                pedido_id, 
-                producto_id=ultimo_producto_id, 
-                cantidad=cantidad - 1, # Restar 1 porque 'seleccionar_producto' ya añadió 1 unidad
-                precio_unitario=ultimo_precio
-            )
-            update_order_status(pedido_id, "AWAITING_CONFIRMATION")
-            return f"Perfecto, has pedido {cantidad} unidades. ¿Deseas ver el resumen antes de confirmar?"
-        
-        except ValueError as e:
-            # Esto solo pasaría si el producto_id recuperado fuera de alguna manera inválido,
-            # pero es un buen resguardo.
-            return f"Ocurrió un error al actualizar la cantidad: {str(e)}"
-
-    elif intent == "confirmar_pedido":
-        update_order_status(pedido_id, "COMPLETED")
-        detalles = get_order_summary(pedido_id)
-        return generar_resumen(detalles) + "\n\n✅ ¡Tu pedido ha sido confirmado! 🚚"
-
-    else:
-        return "Puedo ayudarte con tu pedido ☕. ¿Deseas comenzar?"
+            return "Puedo ayudarte con tu pedido ☕. ¿Deseas comenzar?"
+            
+    except Exception as e:
+        # 🚨 Captura errores graves (ej. fallo de conexión a BD o transacción)
+        logger.error(f"💥 Error grave en el flujo de pedido para user {user_id}: {e}")
+        # Intenta limpiar el pedido si falló y existe
+        if pedido_id:
+             try:
+                 delete_order(pedido_id) 
+             except Exception as cleanup_e:
+                 logger.error(f"Error al limpiar pedido {pedido_id}: {cleanup_e}") 
+        return "Lo siento, ha ocurrido un error interno al procesar tu pedido. Por favor, intenta de nuevo más tarde."
 
 # ======================================================
 # Lógica principal

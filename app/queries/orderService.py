@@ -26,12 +26,12 @@ def delete_order(pedido_id: int):
         conn.close()
 
 def get_last_product_detail(pedido_id: int):
-    """Retorna el producto_id y precio_unitario del último detalle añadido al pedido."""
+    """Retorna el producto_id, precio_unitario y cantidad del último detalle añadido al pedido."""
     conn = get_connection()
     cursor = conn.cursor(dictionary=True)
     try:
         cursor.execute("""
-            SELECT producto_id, precio_unitario 
+            SELECT producto_id, precio_unitario, cantidad 
             FROM pedido_detalles
             WHERE pedido_id = %s
             ORDER BY id DESC LIMIT 1
@@ -90,7 +90,7 @@ def add_or_update_order_detail(pedido_id: int, producto_id, cantidad: int, preci
     cursor = conn.cursor()
 
     try:
-        # 1. Búsqueda por nombre y manejo de errores
+        # 1. Búsqueda por nombre y manejo de errores (si el input es un string no numérico)
         if isinstance(producto_id, str):
             if not producto_id.isdigit():
                 producto_real_id = get_producto_by_name(producto_id)
@@ -103,7 +103,7 @@ def add_or_update_order_detail(pedido_id: int, producto_id, cantidad: int, preci
         try:
             producto_id = int(producto_id)
         except (TypeError, ValueError):
-            # 💥 LANZAR ERROR: Si el ID es None o no numérico (solución al flujo de 'seleccionar_cantidad')
+            # 💥 LANZAR ERROR: Si el ID es None o no numérico
             raise ValueError(f"ID de producto no válido o nulo: {producto_id}")
 
         # 🟢 Verificar si el detalle ya existe
@@ -115,7 +115,7 @@ def add_or_update_order_detail(pedido_id: int, producto_id, cantidad: int, preci
         detalle = cursor.fetchone()
 
         if detalle:
-            # Lógica de UPDATE (suma la nueva cantidad)
+            # Lógica de UPDATE (suma la nueva cantidad, que puede ser negativa para restar)
             nueva_cantidad = detalle[1] + cantidad
             cursor.execute("""
                 UPDATE pedido_detalles
@@ -134,7 +134,7 @@ def add_or_update_order_detail(pedido_id: int, producto_id, cantidad: int, preci
         # Propagar el ValueError (producto no encontrado / ID inválido)
         raise
     except Exception as e:
-        # Capturar cualquier otro error de BD (incluido el IntegrityError 1452 si algo más falla)
+        # Capturar cualquier otro error de BD
         logger.error(f"Error de BD en add_or_update_order_detail: {e}")
         conn.rollback()
         # Se relanza el error para que el agente pueda manejarlo
