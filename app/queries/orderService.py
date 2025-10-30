@@ -41,14 +41,15 @@ def add_or_update_order_detail(pedido_id: int, producto_id, cantidad: int, preci
     conn = get_connection()
     cursor = conn.cursor()
 
-    # 🟡 Si el producto_id viene como texto, buscar el id real
-    producto_real_id = get_producto_by_name(producto_id)
-    if not producto_real_id:
-        print(f"⚠️ Producto no encontrado: '{producto_id}'")
-        cursor.close()
-        conn.close()
-        return
-    producto_id = producto_real_id 
+# Si el producto es un nombre (string con letras), buscamos su ID.
+    if isinstance(producto_id, str) and not producto_id.isdigit():
+        producto_real_id = get_producto_by_name(producto_id)
+        if not producto_real_id:
+            print(f"⚠️ Producto no encontrado: '{producto_id}'")
+            cursor.close()
+            conn.close()
+            return
+        producto_id = producto_real_id
 
     # 🟢 Verificar si el detalle ya existe
     cursor.execute("""
