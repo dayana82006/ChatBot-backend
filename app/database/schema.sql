@@ -48,13 +48,13 @@ CREATE TABLE IF NOT EXISTS productos (
 -- =====================================================
 CREATE TABLE IF NOT EXISTS pedidos (
     id INT AUTO_INCREMENT PRIMARY KEY,
-    user_id VARCHAR(255) NOT NULL COMMENT 'ID del usuario que realizó el pedido',
-    total DECIMAL(10, 2) NOT NULL COMMENT 'Total del pedido',
-    estado VARCHAR(50) DEFAULT 'pendiente' COMMENT 'Estado del pedido (pendiente, procesado, etc.)',
-    creado_en DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT 'Fecha de creación del pedido',
-    actualizado_en DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT 'Última actualización del pedido',
-    FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='Pedidos realizados por los usuarios';
+    user_id VARCHAR(255) NOT NULL,
+    total DECIMAL(10, 2) DEFAULT 0.00,
+    estado ENUM('pendiente', 'BROWSING', 'AWAITING_QUANTITY', 'AWAITING_CONFIRMATION', 'COMPLETED', 'CANCELLED') DEFAULT 'pendiente',
+    creado_en DATETIME DEFAULT CURRENT_TIMESTAMP,
+    actualizado_en DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='Tabla principal de pedidos';
+
 
 -- =====================================================
 -- TABLA: pedido_detalles
@@ -69,6 +69,7 @@ CREATE TABLE IF NOT EXISTS pedido_detalles (
     FOREIGN KEY (pedido_id) REFERENCES pedidos(id) ON DELETE CASCADE,
     FOREIGN KEY (producto_id) REFERENCES productos(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='Detalles de los productos en un pedido';
+
 
 
 -- =====================================================
