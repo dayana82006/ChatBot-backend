@@ -90,31 +90,22 @@ def add_or_update_order_detail(pedido_id: int, producto_id, cantidad: int, preci
     cursor = conn.cursor()
 
     try:
-        # 1. Búsqueda y validación si el producto_id vino como string
-        if isinstance(producto_id, str):
-            if not producto_id.isdigit():
-                producto_real_id = get_producto_by_name(producto_id)
-                if not producto_real_id:
-                    raise ValueError(f"Producto '{producto_id}' no se encontró en el catálogo.")
-                producto_id = producto_real_id
-            
-        # 2. Conversión a entero y validación final
+        # Aseguramos que el producto_id sea un entero antes de usarlo.
         try:
-            producto_id = int(producto_id)
+            # Esta conversión fallará si producto_id es None o una cadena inválida.
+            producto_id_final = int(producto_id)
         except (TypeError, ValueError):
-            # Esto maneja casos donde 'producto_id' es None
-            raise ValueError(f"ID de producto no válido o nulo: {producto_id}")
+            raise ValueError(f"ID de producto no válido: {producto_id}")
 
-        # 🚨 LÍNEA CLAVE DE DEBUG: Muestra el ID final antes de la BD
-        logger.debug(f"DEBUG: Insertando/Actualizando Detalle: Pedido ID={pedido_id}, Producto ID={producto_id}, Cantidad={cantidad}")
-        # 🚨 ESTA LÍNEA DEBE ESTAR AHÍ PARA MOSTRAR EL VALOR FINAL
-        logger.debug(f"DEBUG FINAL: Pedido ID={pedido_id}, Producto ID={producto_id}, Cantidad={cantidad}")
+        # 🚨 LÍNEA CLAVE DE DEBUG: ¡Este log debe aparecer antes del error!
+        logger.debug(f"SQL CHECK: Intentando insertar/actualizar Producto ID={producto_id_final} en Pedido ID={pedido_id}")
+
         # 🟢 Verificar si el detalle ya existe
         cursor.execute("""
             SELECT id, cantidad FROM pedido_detalles
             WHERE pedido_id = %s AND producto_id = %s
-        """, (pedido_id, producto_id))
-        
+        """, (pedido_id, producto_id_final)) # Usamos el valor final
+
         detalle = cursor.fetchone()
 
         if detalle:
@@ -126,16 +117,20 @@ def add_or_update_order_detail(pedido_id: int, producto_id, cantidad: int, preci
                 WHERE id = %s
             """, (nueva_cantidad, detalle[0]))
         else:
-            # Lógica de INSERT (Aquí es donde falla la clave foránea)
+            # Lógica de INSERT (Aquí es donde ocurre el fallo de clave foránea)
+            # 💡 Cambio: Aseguramos que el precio se maneje como un decimal antes de insertar
             cursor.execute("""
                 INSERT INTO pedido_detalles (pedido_id, producto_id, cantidad, precio_unitario)
                 VALUES (%s, %s, %s, %s)
-            """, (pedido_id, producto_id, cantidad, precio_unitario))
+            """, (int(pedido_id), producto_id_final, int(cantidad), float(precio_unitario))) # CASTING EXPLÍCITO DE TIPOS
 
         conn.commit()
     except ValueError:
+        # Re-lanza los errores de validación de datos (Python)
+        conn.rollback()
         raise
     except Exception as e:
+        # Maneja el error de BD (MySQL)
         logger.error(f"Error de BD en add_or_update_order_detail: {e}")
         conn.rollback()
         raise
