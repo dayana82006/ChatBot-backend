@@ -5,6 +5,7 @@ from qdrant_client.http import models as qmodels
 from qdrant_client.http.exceptions import ResponseHandlingException
 from app.config import settings
 from app.services.embeddings import embed_texts, get_embedding_dimension
+import httpx
 
 logger = logging.getLogger(__name__)
 
@@ -136,3 +137,24 @@ def get_collection_info() -> Dict[str, Any]:
     except Exception as e:
         logger.exception(f"Error obteniendo info de colección: {e}")
         return {}
+    
+
+    
+
+def get_all_products():
+    """
+    Obtiene todos los productos de la colección en Qdrant.
+    """
+    url = f"http://{settings.QDRANT_HOST}:{settings.QDRANT_PORT}/collections/company_kb/points/scroll"
+
+    try:
+        response = httpx.post(url, json={"limit": 100})
+        response.raise_for_status()
+        data = response.json()
+        puntos = data.get("result", {}).get("points", [])
+        productos = [p.get("payload", {}) for p in puntos]
+        logging.info(f"📦 {len(productos)} productos obtenidos desde Qdrant.")
+        return productos
+    except Exception as e:
+        logging.error(f"💥 Error al obtener productos desde Qdrant: {e}")
+        return []

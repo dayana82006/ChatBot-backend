@@ -9,6 +9,9 @@ from app.database.database import init_db, execute_schema
 from app.services.qdrant_service import ensure_collection, get_collection_info
 from app.services.redisServices import init_redis, close_redis
 
+from scripts.syncProducts import sync_products_from_qdrant
+
+
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
@@ -43,6 +46,9 @@ async def lifespan(app: FastAPI):
         collection_info = get_collection_info()
         logger.info(f"Colección Qdrant: {collection_info}")
         
+        # Sincroniza productos al iniciar
+        sync_products_from_qdrant()
+        logging.info("🚀 Iniciando aplicación FastAPI...")
         # Verificar Gemini
         if settings.USE_GEMINI and settings.GEMINI_API_KEY:
             logger.info("✅ Gemini API configurada")
@@ -129,6 +135,8 @@ async def health_check():
             "status": "error",
             "error": str(e)
         }
+
+
 
 @app.get("/", summary="Root", tags=["System"])
 async def root():

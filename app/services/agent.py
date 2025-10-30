@@ -1,8 +1,8 @@
 import logging
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 from app.services.qdrant_service import search
 from app.queries.chatQueries import get_or_create_chat
-from app.queries.messageQueries import add_message, get_recent_messages_by_user
+from app.queries.messageQueries import add_message
 from app.config import settings
 from app.services.redisServices import (
     get_user_session, set_user_session,
@@ -10,11 +10,18 @@ from app.services.redisServices import (
     push_message_queue, pop_message_queue,
     clear_user_session, clear_chat_context
 )
-from typing import Optional
-
+from app.queries.orderService import (
+    get_or_create_pending_order,
+    add_or_update_order_detail,
+    update_order_status,
+    get_order_summary
+)
 
 logger = logging.getLogger(__name__)
 
+# ======================================================
+# Configuración de Gemini
+# ======================================================
 try:
     import google.generativeai as genai
     GEMINI_AVAILABLE = True
@@ -24,6 +31,10 @@ try:
 except ImportError as e:
     GEMINI_AVAILABLE = False
     logger.warning(f"⚠️ Gemini no disponible: {e}")
+
+# ======================================================
+# Prompt base del sistema
+# ======================================================
 
 SYSTEM_PROMPT = """
 # Contexto General y Propósito
@@ -157,6 +168,54 @@ Brindar un servicio excepcional que facilite el proceso de compra y garantice un
 cordial y profesional, guiando siempre hacia una venta, pero respetando la autonomía del cliente.
 """
 
+
+# ======================================================
+# Funciones auxiliares
+# ======================================================
+
+def detect_intent(text: str) -> str:
+    """Detecta intención general del usuario"""
+    text = text.lower()
+    if any(k in text for k in ["pedido", "ordenar", "comprar", "quiero café", "hacer pedido"]):
+        return "hacer_pedido"
+    if any(k in text for k in ["confirmo", "sí", "ok", "confirmar"]):
+        return "confirmar_pedido"
+    if any(k in text for k in ["huila", "nariño", "tolima", "clásico", "descafeinado"]):
+        return "seleccionar_producto"
+    if any(k in text for k in ["unidad", "bolsa", "quiero", "libras", "cantidad"]):
+        return "seleccionar_cantidad"
+    return "general"
+
+def extraer_numero(text: str) -> int:
+    import re
+    m = re.search(r"\d+", text)
+    return int(m.group()) if m else 1
+
+def obtener_producto_desde_texto(text: str):
+    productos = {
+        "huila": (1, 18000),
+        "nariño": (2, 19000),
+        "tolima": (3, 18500),
+        "clásico": (4, 15000),
+        "descafeinado": (5, 20000)
+    }
+    for k, v in productos.items():
+        if k in text:
+            return v
+    return None
+
+def generar_resumen(detalles: List[Dict[str, Any]]) -> str:
+    texto = "📋 Resumen de tu pedido:\n\n"
+    total = 0
+    for d in detalles:
+        subtotal = d["cantidad"] * float(d["precio_unitario"])
+        texto += f"- Producto #{d['producto_id']}: {d['cantidad']} x ${d['precio_unitario']} = ${subtotal}\n"
+        total += subtotal
+    texto += f"\n💰 Total: ${total}\n¿Deseas confirmar tu pedido? (sí / no)"
+    return texto
+
+    # otras funciones auxiliares
+
 def build_context_from_kb(fragments: List[Dict[str, Any]]) -> str:
     """Construye el contexto a partir de los fragmentos recuperados"""
     if not fragments:
@@ -230,6 +289,49 @@ def remove_greeting_from_response(response: str) -> str:
     
     return response
 
+
+# ======================================================
+# 🛒 FLUJO DE PEDIDO
+# ======================================================
+
+def handle_order_flow(user_id: str, intent: str, user_message: str) -> str:
+    """
+    Controla el flujo completo de pedidos paso a paso.
+    """
+    pedido_id = get_or_create_pending_order(user_id)
+
+    if intent == "hacer_pedido":
+        update_order_status(pedido_id, "BROWSING")
+        return "Perfecto ☕ ¿Qué tipo de café deseas? Tenemos Huila, Nariño, Tolima, Clásico y Descafeinado."
+
+    elif intent == "seleccionar_producto":
+        producto = obtener_producto_desde_texto(user_message)
+        if producto:
+            producto_id, precio = producto
+            add_or_update_order_detail(pedido_id, producto_id, cantidad=1, precio_unitario=precio)
+            update_order_status(pedido_id, "AWAITING_QUANTITY")
+            return f"Excelente elección 😋 ¿Cuántas unidades deseas?"
+        else:
+            return "No entendí qué tipo de café deseas. ¿Podrías repetirlo?"
+
+    elif intent == "seleccionar_cantidad":
+        cantidad = extraer_numero(user_message)
+        add_or_update_order_detail(pedido_id, producto_id=None, cantidad=cantidad, precio_unitario=None)       
+        update_order_status(pedido_id, "AWAITING_CONFIRMATION")
+        return f"Perfecto, has pedido {cantidad} unidades. ¿Deseas ver el resumen antes de confirmar?"
+
+    elif intent == "confirmar_pedido":
+        update_order_status(pedido_id, "COMPLETED")
+        detalles = get_order_summary(pedido_id)
+        return generar_resumen(detalles) + "\n\n✅ ¡Tu pedido ha sido confirmado! 🚚"
+
+    else:
+        return "Puedo ayudarte con tu pedido ☕. ¿Deseas comenzar?"
+
+
+# ======================================================
+# Lógica principal
+# ======================================================
 async def get_agent_response(
     user_id: str,
     user_message: str,
@@ -237,40 +339,32 @@ async def get_agent_response(
     name: Optional[str] = None,
     email: Optional[str] = None,
     phone: Optional[str] = None
-) -> str:
-    """
-    Genera respuesta del agente usando Redis, RAG y Gemini.
-    Sincroniza los datos con MySQL (usuarios, chats y mensajes).
-    """
+    ) -> str:
     try:
-        # 1️⃣ Agregar mensaje del usuario a la cola
+        # 1️⃣ Agregar mensaje del usuario
         await push_message_queue(user_id, user_message)
-        message_to_process = await pop_message_queue(user_id)
-        if not message_to_process:
-            logger.warning(f"No hay mensajes pendientes en la cola de {user_id}, usando mensaje actual.")
-            message_to_process = user_message
+        message_to_process = await pop_message_queue(user_id) or user_message
 
-        # 2️⃣ Recuperar sesión y contexto desde Redis
+        # 2️⃣ Recuperar sesión y contexto
         session = await get_user_session(user_id) or {}
         chat_context = await get_chat_context(user_id) or []
 
         logger.info(f"🧠 Procesando mensaje de {user_id} con contexto Redis...")
 
-        # 3️⃣ Determinar si es primera conversación
+        # 3️⃣ Determinar si es la primera conversación
         is_first_interaction = is_first_conversation(chat_context)
-        logger.info(f"Primera interacción: {is_first_interaction}, Historial: {len(chat_context)} mensajes")
+        logger.info(f"Primera interacción: {is_first_interaction}")
 
-        # 4️⃣ Buscar información relevante en Qdrant (RAG)
+        # 4️⃣ Buscar información en Qdrant
         fragments = await search(
             query=message_to_process,
             top_k=settings.RAG_TOP_K,
             score_threshold=settings.RAG_SCORE_THRESHOLD
-        )
-
+ )
         kb_context = build_context_from_kb(fragments)
         has_kb_info = bool(kb_context.strip())
 
-        # 5️⃣ Construir contexto de conversación
+        # 5️⃣ Construir contexto conversacional
         recent_context_text = build_conversation_context(chat_context)
 
         # 6️⃣ Evitar saludos innecesarios
@@ -278,10 +372,10 @@ async def get_agent_response(
         if not is_first_interaction:
             no_greeting_instruction = (
                 "\n\nIMPORTANTE: El usuario ya ha hablado contigo antes. "
-                "NO SALUDES DE NINGUNA FORMA. Responde directamente a su pregunta sin ningún saludo inicial."
+                "NO SALUDES DE NINGUNA FORMA. Responde directamente sin saludo."
             )
 
-        # 7️⃣ Construir prompt completo
+        # 7️⃣ Construir prompt
         prompt = (
             f"{SYSTEM_PROMPT}"
             f"{no_greeting_instruction}"
@@ -291,12 +385,17 @@ async def get_agent_response(
             f"{recent_context_text if recent_context_text else '[Primer mensaje del usuario]'}"
             f"\n\n--- MENSAJE ACTUAL DEL USUARIO ---\n"
             f"{message_to_process}"
-            f"\n\n--- INSTRUCCIONES FINALES ---"
-            f"\nResponde como IZA de forma atractiva, profesional y con emojis naturales. "
-            f"NO incluyas saludo alguno en tu respuesta. Ve directo a ayudar al usuario. "
-            f"No uses asteriscos, guiones ni otros símbolos para resaltar. "
-            f"Usa emojis para destacar información importante."
-        )
+          )
+
+        # 🔍 Detectar intención
+        intent = detect_intent(user_message)
+
+            # 🛒 Manejar flujo de pedido
+        if intent in ["hacer_pedido", "seleccionar_producto", "seleccionar_cantidad", "confirmar_pedido"]:
+            order_response = handle_order_flow(user_id, intent, user_message)
+            await add_chat_turn(user_id, order_response, "assistant")
+            return order_response
+
 
         # 8️⃣ Generar respuesta (Gemini o fallback)
         if GEMINI_AVAILABLE and settings.GEMINI_API_KEY and settings.USE_GEMINI:
@@ -304,16 +403,12 @@ async def get_agent_response(
         else:
             response = generate_fallback_response(message_to_process, kb_context)
 
-        # 9️⃣ Limpiar saludos (seguridad)
+        # 9️⃣ Limpiar saludos
         if not is_first_interaction and extract_greeting_patterns(response):
-            logger.warning(f"⚠️ Saludo detectado en respuesta para {user_id}, removiendo...")
             response = remove_greeting_from_response(response)
 
-        # 🔟 Guardar datos en MySQL (usuario, chat, mensajes)
+        # 🔟 Guardar en MySQL
         try:
-            from app.queries.chatQueries import get_or_create_chat
-            from app.queries.messageQueries import add_message
-
             chat_id = get_or_create_chat(
                 user_id=user_id,
                 channel=channel,
@@ -321,30 +416,29 @@ async def get_agent_response(
                 email=email,
                 phone=phone
             )
-
             add_message(chat_id, "user", user_message)
             add_message(chat_id, "assistant", response)
-
-            logger.info(f"💾 Datos guardados en MySQL para {user_id} (chat_id={chat_id})")
         except Exception as db_error:
             logger.error(f"❌ Error guardando en MySQL: {db_error}")
 
-        # 1️⃣1️⃣ Guardar también en Redis (sesión y contexto)
+        # 1️⃣1️⃣ Guardar en Redis
         await add_chat_turn(user_id, user_message, "user")
         await add_chat_turn(user_id, response, "assistant")
-
         session["last_message"] = user_message
         session["conversation_started"] = True
         await set_user_session(user_id, session)
 
-        logger.info(f"✅ Respuesta generada y sincronizada para {user_id}: {response[:80]}...")
+        logger.info(f"✅ Respuesta generada para {user_id}")
         return response
 
     except Exception as e:
         logger.exception(f"💥 Error generando respuesta: {e}")
-        await clear_user_session(user_id)
-        await clear_chat_context(user_id)
+        if "corrupt" in str(e).lower() or "decode" in str(e).lower():
+            await clear_user_session(user_id)
+            await clear_chat_context(user_id)
         return "Disculpa, hubo un error procesando tu mensaje. Intenta más tarde."
+
+
 
 async def generate_with_gemini(full_prompt: str, user_message: str) -> str:
     """Genera respuesta usando Google Gemini"""
@@ -365,7 +459,7 @@ async def generate_with_gemini(full_prompt: str, user_message: str) -> str:
             }
         )
 
-        response = model.generate_content(full_prompt)
+        response =  model.generate_content(full_prompt)
 
         if response and response.text:
             return response.text.strip()
@@ -378,16 +472,14 @@ async def generate_with_gemini(full_prompt: str, user_message: str) -> str:
         return ""
 
 def generate_fallback_response(user_message: str, context: str) -> str:
-    """Respuesta de fallback cuando Gemini no está disponible"""
     if not context.strip():
         return (
-            "Por ahora no tengo información específica sobre eso, "
-            "pero puedo ponerte en contacto con nuestro equipo comercial. "
-            "¿Podrías contarme un poco más de lo que buscas?"
+            "Puedo ayudarte con tu pedido ☕. "
+            "Cuéntame qué tipo de café buscas: Huila, Nariño, Tolima, Clásico o Descafeinado. "
+            "Te guiaré paso a paso para realizar tu compra fácilmente. 🚀"
         )
     
     return (
-        f"Basándome en lo que encontré en nuestra base de conocimiento:\n\n"
-        f"{context}\n\n"
-        f"¿Te gustaría saber más detalles?"
+        f"Esto es lo que encontré sobre eso 📖\n\n{context}\n\n"
+        "¿Te gustaría que te ayude a elegir el café ideal para ti? ☕"
     )
