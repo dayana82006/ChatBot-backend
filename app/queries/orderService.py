@@ -36,10 +36,25 @@ def get_or_create_pending_order(user_id: str):
 # =====================================================
 # 🔹 Agregar o actualizar producto en el pedido
 # =====================================================
-def add_or_update_order_detail(pedido_id: int, producto_id: int, cantidad: int, precio_unitario: float):
+def add_or_update_order_detail(pedido_id: int, producto_id, cantidad: int, precio_unitario: float):
     conn = get_connection()
     cursor = conn.cursor()
 
+    # 🟡 Si el producto_id viene como texto, buscar el id real
+    if isinstance(producto_id, str):
+        cursor.execute("""
+            SELECT id FROM productos 
+            WHERE LOWER(nombre) = LOWER(%s)
+        """, (producto_id.strip(),))
+        result = cursor.fetchone()
+        if not result:
+            print(f"⚠️ Producto no encontrado: '{producto_id}'")
+            cursor.close()
+            conn.close()
+            return
+        producto_id = result[0]
+
+    # 🟢 Verificar si el detalle ya existe
     cursor.execute("""
         SELECT id, cantidad FROM pedido_detalles
         WHERE pedido_id = %s AND producto_id = %s
