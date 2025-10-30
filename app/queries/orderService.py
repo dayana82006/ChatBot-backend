@@ -1,6 +1,7 @@
 import logging
 from datetime import datetime
 from app.database import get_connection
+from app.queries.productService import get_producto_by_name
 
 logger = logging.getLogger(__name__)
 
@@ -41,18 +42,13 @@ def add_or_update_order_detail(pedido_id: int, producto_id, cantidad: int, preci
     cursor = conn.cursor()
 
     # 🟡 Si el producto_id viene como texto, buscar el id real
-    if isinstance(producto_id, str):
-        cursor.execute("""
-            SELECT id FROM productos 
-            WHERE LOWER(nombre) = LOWER(%s)
-        """, (producto_id.strip(),))
-        result = cursor.fetchone()
-        if not result:
-            print(f"⚠️ Producto no encontrado: '{producto_id}'")
-            cursor.close()
-            conn.close()
-            return
-        producto_id = result[0]
+    producto_real_id = get_producto_by_name(producto_id)
+    if not producto_real_id:
+        print(f"⚠️ Producto no encontrado: '{producto_id}'")
+        cursor.close()
+        conn.close()
+        return
+    producto_id = producto_real_id 
 
     # 🟢 Verificar si el detalle ya existe
     cursor.execute("""
@@ -102,9 +98,17 @@ def get_order_summary(pedido_id: int):
     cursor = conn.cursor(dictionary=True)
     
     cursor.execute("""
-        SELECT p.id, p.total, p.estado, d.producto_id, d.cantidad, d.precio_unitario
+        SELECT 
+            p.id AS pedido_id,
+            p.total,
+            p.estado,
+            d.producto_id,
+            prod.nombre AS producto_nombre,
+            d.cantidad,
+            d.precio_unitario
         FROM pedidos p
         JOIN pedido_detalles d ON p.id = d.pedido_id
+        JOIN productos prod ON d.producto_id = prod.id
         WHERE p.id = %s
     """, (pedido_id,))
     
