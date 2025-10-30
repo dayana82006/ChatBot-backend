@@ -101,10 +101,11 @@ def add_or_update_order_detail(pedido_id: int, producto_id, cantidad: int, preci
         logger.debug(f"SQL CHECK: Intentando insertar/actualizar Producto ID={producto_id_final} en Pedido ID={pedido_id}")
 
         # 🟢 Verificar si el detalle ya existe
+        # Nota: Usamos la sintaxis estándar de placeholder aquí.
         cursor.execute("""
             SELECT id, cantidad FROM pedido_detalles
             WHERE pedido_id = %s AND producto_id = %s
-        """, (pedido_id, producto_id_final)) # Usamos el valor final
+        """, (pedido_id, producto_id_final)) 
 
         detalle = cursor.fetchone()
 
@@ -117,16 +118,18 @@ def add_or_update_order_detail(pedido_id: int, producto_id, cantidad: int, preci
                 WHERE id = %s
             """, (nueva_cantidad, detalle[0]))
         else:
-            # Lógica de INSERT (Aquí es donde ocurre el fallo de clave foránea)
-            # 💡 Cambio: Aseguramos que el precio se maneje como un decimal antes de insertar
+            # Lógica de INSERT (PUNTO CRÍTICO)
+            # USAMOS CAST( %s AS UNSIGNED ) para forzar que MySQL interprete el valor
+            # del producto_id como un entero sin signo (el tipo más compatible con INT PRIMARY KEY).
             cursor.execute("""
                 INSERT INTO pedido_detalles (pedido_id, producto_id, cantidad, precio_unitario)
-                VALUES (%s, %s, %s, %s)
-            """, (int(pedido_id), producto_id_final, int(cantidad), float(precio_unitario))) # CASTING EXPLÍCITO DE TIPOS
+                VALUES (%s, CAST( %s AS UNSIGNED ), %s, %s) 
+            """, (int(pedido_id), producto_id_final, int(cantidad), float(precio_unitario)))
 
         conn.commit()
-    except ValueError:
+    except ValueError as ve:
         # Re-lanza los errores de validación de datos (Python)
+        logger.error(f"Error de validación de datos: {ve}")
         conn.rollback()
         raise
     except Exception as e:
@@ -137,6 +140,7 @@ def add_or_update_order_detail(pedido_id: int, producto_id, cantidad: int, preci
     finally:
         cursor.close()
         conn.close()
+
 
 # =====================================================
 # 🔹 Actualizar estado del pedido
