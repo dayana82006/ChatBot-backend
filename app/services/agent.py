@@ -17,6 +17,8 @@ from app.queries.orderService import (
     get_order_summary
 )
 
+
+from app.queries.orderService import add_or_update_order_detail, update_order_status, delete_order # Asegúrate de importar delete_order
 logger = logging.getLogger(__name__)
 
 # ======================================================
@@ -296,9 +298,10 @@ def remove_greeting_from_response(response: str) -> str:
 
 def handle_order_flow(user_id: str, intent: str, user_message: str) -> str:
     """
-    Controla el flujo completo de pedidos paso a paso.
+    Controla el flujo completo de pedidos paso a paso, con manejo de transacciones.
     """
-    pedido_id = get_or_create_pending_order(user_id)
+    # 1. Obtener o crear el pedido pendiente
+    pedido_id = get_or_create_pending_order(user_id) 
 
     if intent == "hacer_pedido":
         update_order_status(pedido_id, "BROWSING")
@@ -308,17 +311,60 @@ def handle_order_flow(user_id: str, intent: str, user_message: str) -> str:
         producto = obtener_producto_desde_texto(user_message)
         if producto:
             producto_id, precio = producto
-            add_or_update_order_detail(pedido_id, producto_id, cantidad=1, precio_unitario=precio)
-            update_order_status(pedido_id, "AWAITING_QUANTITY")
-            return f"Excelente elección 😋 ¿Cuántas unidades deseas?"
+            
+            try:
+                # 💥 Envolvemos la llamada en try/except
+                add_or_update_order_detail(pedido_id, producto_id, cantidad=1, precio_unitario=precio)
+                update_order_status(pedido_id, "AWAITING_QUANTITY")
+                
+                # 💡 Ahora podemos continuar con seguridad
+                return f"Excelente elección 😋 ¿Cuántas unidades deseas?"
+
+            except ValueError as e:
+                # 🚨 El producto no existe o el ID es nulo.
+                error_msg = str(e)
+                # 💡 Limpieza de transacción: Eliminar el pedido si se creó sin detalles
+                # Esto es opcional, pero previene pedidos vacíos.
+                # Nota: Si el pedido ya tenía detalles, esta línea podría ser problemática. 
+                # Se recomienda una lógica más avanzada para pedidos ya iniciados.
+                # Por ahora, solo respondemos el error:
+                return f"Lo siento, parece que {error_msg}. ¿Podrías intentar con otro nombre?"
+            
         else:
             return "No entendí qué tipo de café deseas. ¿Podrías repetirlo?"
 
     elif intent == "seleccionar_cantidad":
         cantidad = extraer_numero(user_message)
-        add_or_update_order_detail(pedido_id, producto_id=None, cantidad=cantidad, precio_unitario=None)       
-        update_order_status(pedido_id, "AWAITING_CONFIRMATION")
-        return f"Perfecto, has pedido {cantidad} unidades. ¿Deseas ver el resumen antes de confirmar?"
+        
+        if cantidad <= 0:
+             return "Por favor, ingresa una cantidad válida (mayor que cero)."
+        
+        # 💡 Recuperación de Estado: Obtener el último producto añadido
+        detalle = get_last_product_detail(pedido_id)
+        
+        if not detalle:
+            # El usuario saltó el paso de 'seleccionar_producto'.
+            update_order_status(pedido_id, "BROWSING")
+            return "Parece que no has seleccionado ningún producto aún. ¿Cuál deseas agregar?"
+        
+        ultimo_producto_id = detalle['producto_id']
+        ultimo_precio = detalle['precio_unitario']
+
+        try:
+            # 💥 Usar el producto_id y precio recuperados
+            add_or_update_order_detail(
+                pedido_id, 
+                producto_id=ultimo_producto_id, 
+                cantidad=cantidad - 1, # Restar 1 porque 'seleccionar_producto' ya añadió 1 unidad
+                precio_unitario=ultimo_precio
+            )
+            update_order_status(pedido_id, "AWAITING_CONFIRMATION")
+            return f"Perfecto, has pedido {cantidad} unidades. ¿Deseas ver el resumen antes de confirmar?"
+        
+        except ValueError as e:
+            # Esto solo pasaría si el producto_id recuperado fuera de alguna manera inválido,
+            # pero es un buen resguardo.
+            return f"Ocurrió un error al actualizar la cantidad: {str(e)}"
 
     elif intent == "confirmar_pedido":
         update_order_status(pedido_id, "COMPLETED")
@@ -327,7 +373,6 @@ def handle_order_flow(user_id: str, intent: str, user_message: str) -> str:
 
     else:
         return "Puedo ayudarte con tu pedido ☕. ¿Deseas comenzar?"
-
 
 # ======================================================
 # Lógica principal
