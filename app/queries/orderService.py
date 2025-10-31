@@ -86,55 +86,68 @@ def get_or_create_pending_order(user_id: str):
 # 🔹 Agregar o actualizar producto en el pedido (CORREGIDO)
 # =====================================================
 def add_or_update_order_detail(pedido_id: int, producto_id, cantidad: int, precio_unitario: float):
+    """
+    Agrega o actualiza un detalle de pedido en la tabla pedido_detalles.
+    
+    Args:
+        pedido_id (int): ID del pedido
+        producto_id: ID del producto
+        cantidad (int): Cantidad del producto
+        precio_unitario (float): Precio unitario del producto
+    """
     conn = get_connection()
-    cursor = conn.cursor()
+    cursor = conn.cursor(dictionary=True)
 
     try:
-        # Aseguramos que el producto_id sea un entero antes de usarlo.
-        try:
-            # Esta conversión fallará si producto_id es None o una cadena inválida.
-            producto_id_final = int(producto_id)
-        except (TypeError, ValueError):
-            raise ValueError(f"ID de producto no válido: {producto_id}")
+        # Validación de tipos de datos
+        pedido_id = int(pedido_id)
+        producto_id = int(producto_id)
+        cantidad = int(cantidad)
+        precio_unitario = float(precio_unitario)
 
-        # 🚨 LÍNEA CLAVE DE DEBUG: ¡Este log debe aparecer antes del error!
-        logger.debug(f"SQL CHECK: Intentando insertar/actualizar Producto ID={producto_id_final} en Pedido ID={pedido_id}")
+        # Log para debug
+        logger.info(f"Agregando/actualizando detalle: Pedido={pedido_id}, Producto={producto_id}, Cantidad={cantidad}, Precio={precio_unitario}")
 
-        # 🟢 Verificar si el detalle ya existe
-        # Nota: Usamos la sintaxis estándar de placeholder aquí.
+        # Verificar si el detalle ya existe
         cursor.execute("""
-            SELECT id, cantidad FROM pedido_detalles
+            SELECT id, cantidad 
+            FROM pedido_detalles 
             WHERE pedido_id = %s AND producto_id = %s
-        """, (pedido_id, producto_id_final)) 
-
+        """, (pedido_id, producto_id))
+        
         detalle = cursor.fetchone()
-
+        
         if detalle:
-            # Lógica de UPDATE
-            nueva_cantidad = detalle[1] + cantidad
+            # Actualizar cantidad si el detalle existe
+            nueva_cantidad = detalle['cantidad'] + cantidad
             cursor.execute("""
-                UPDATE pedido_detalles
-                SET cantidad = %s
+                UPDATE pedido_detalles 
+                SET cantidad = %s,
+                    precio_unitario = %s
                 WHERE id = %s
-            """, (nueva_cantidad, detalle[0]))
+            """, (nueva_cantidad, precio_unitario, detalle['id']))
+            
+            logger.info(f"Detalle actualizado: ID={detalle['id']}, Nueva cantidad={nueva_cantidad}")
         else:
-            # Lógica de INSERT (PUNTO CRÍTICO)
-            # USAMOS CAST( %s AS UNSIGNED ) para forzar que MySQL interprete el valor
-            # del producto_id como un entero sin signo (el tipo más compatible con INT PRIMARY KEY).
+            # Insertar nuevo detalle
             cursor.execute("""
-                INSERT INTO pedido_detalles (pedido_id, producto_id, cantidad, precio_unitario)
-                VALUES (%s, CAST( %s AS UNSIGNED ), %s, %s) 
-            """, (int(pedido_id), producto_id_final, int(cantidad), float(precio_unitario)))
+                INSERT INTO pedido_detalles 
+                (pedido_id, producto_id, cantidad, precio_unitario)
+                VALUES (%s, %s, %s, %s)
+            """, (pedido_id, producto_id, cantidad, precio_unitario))
+            
+            inserted_id = cursor.lastrowid
+            logger.info(f"Nuevo detalle insertado: ID={inserted_id}")
 
+        # Confirmar cambios
         conn.commit()
-    except ValueError as ve:
-        # Re-lanza los errores de validación de datos (Python)
-        logger.error(f"Error de validación de datos: {ve}")
+        
+    except (ValueError, TypeError) as e:
+        logger.error(f"Error de validación de datos: {str(e)}")
         conn.rollback()
-        raise
+        raise ValueError(f"Error en los datos: {str(e)}")
     except Exception as e:
-        # Maneja el error de BD (MySQL)
-        logger.error(f"Error de BD en add_or_update_order_detail: {e}")
+        logger.error(f"Error de BD en add_or_update_order_detail: {str(e)}")
         conn.rollback()
         raise
     finally:
