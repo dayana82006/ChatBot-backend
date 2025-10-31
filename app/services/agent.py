@@ -10,6 +10,7 @@ from app.services.redisServices import (
     push_message_queue, pop_message_queue,
     clear_user_session, clear_chat_context
 )
+from database.database import get_connection
 from app.queries.orderService import (
     get_or_create_pending_order,
     add_or_update_order_detail,
@@ -19,7 +20,6 @@ from app.queries.orderService import (
     delete_order              # ⬅️ Para la limpieza en caso de error grave
 )
 import re
-
 
 logger = logging.getLogger(__name__)
 
@@ -180,7 +180,7 @@ cordial y profesional, guiando siempre hacia una venta, pero respetando la auton
 def detect_intent(text: str) -> str:
     """Detecta intención general del usuario"""
     text = text.lower()
-    if any(k in text for k in ["pedido", "ordenar", "comprar", "quiero café", "hacer pedido"]):
+    if any(k in text for k in ["pedido", "ordenar", "comprar", "hacer pedido"]):
         return "hacer_pedido"
     if any(k in text for k in ["confirmo", "sí", "ok", "confirmar"]):
         return "confirmar_pedido"
@@ -331,94 +331,106 @@ def handle_order_flow(user_id: str, intent: str, user_message: str) -> str:
     """
     Controla el flujo completo de pedidos paso a paso.
     """
-    pedido_id = None # Inicializar para asegurar que esté en el scope del 'except' global
-    try:
-        # 1. Obtener o crear el pedido pendiente
-        pedido_id = get_or_create_pending_order(user_id) 
+    pedido_id = None
+    logger.info(f"🌀 [handle_order_flow] Inicio del flujo | user_id={user_id} | intent={intent} | mensaje='{user_message}'")
 
+    try:
+        # 🔹 Obtener o crear el pedido pendiente
+        pedido_id = get_or_create_pending_order(user_id)
+        logger.debug(f"📦 Pedido activo ID: {pedido_id}")
+
+        # 🔹 Paso 1: Usuario inicia pedido
         if intent == "hacer_pedido":
             update_order_status(pedido_id, "BROWSING")
+            logger.info(f"🛒 Pedido {pedido_id} actualizado a estado BROWSING")
             return "Perfecto ☕ ¿Qué tipo de café deseas? Tenemos Clásico, Huila, Nariño, Tolima y Descafeinado."
 
+        # 🔹 Paso 2: Selección de producto
         elif intent == "seleccionar_producto":
-            producto = obtener_producto_desde_texto(user_message)
+            logger.info("🔍 Detectando producto desde el mensaje del usuario...")
             
+            # ✅ Aquí abrimos conexión a MySQL solo para buscar el producto
+            connection = get_connection()
+            producto = obtener_producto_desde_texto(user_message, connection)
+            connection.close()
+
+            logger.debug(f"🧩 Resultado obtener_producto_desde_texto: {producto}")
+
             if producto:
                 producto_id, precio = producto
-                # 🚨 AGREGAR ESTA LÍNEA AQUÍ
-                logger.debug(f"ID extraído por Python: {producto_id}. Precio: {precio}")
-                
+                logger.debug(f"✅ Producto detectado | ID={producto_id}, Precio={precio}")
+
                 try:
-                    # 🟢 Añadimos 1 unidad inicialmente. El producto_id es el entero correcto (ej. 2)
-                    add_or_update_order_detail(pedido_id, producto_id, cantidad=1, precio_unitario=precio)
-                    
+                    add_or_update_order_detail(
+                        pedido_id, producto_id, cantidad=1, precio_unitario=precio
+                    )
                     update_order_status(pedido_id, "AWAITING_QUANTITY")
-                    
-                    return f"Excelente elección 😋 ¿Cuántas unidades deseas de este producto?"
+                    logger.info(f"🛒 Producto {producto_id} agregado al pedido {pedido_id}")
+                    return "Excelente elección 😋 ¿Cuántas unidades deseas de este producto?"
 
                 except ValueError as e:
-                    # 🚨 Maneja el error de producto no encontrado o ID inválido
                     error_msg = str(e)
-                    logger.warning(f"Error en selección de producto para pedido {pedido_id}: {error_msg}")
+                    logger.warning(f"⚠️ Error en selección de producto (pedido {pedido_id}): {error_msg}")
                     return f"Lo siento, parece que {error_msg}. ¿Podrías intentar con otro nombre?"
-                
             else:
+                logger.warning(f"❌ No se detectó producto en el mensaje: '{user_message}'")
                 return "No entendí qué tipo de café deseas. ¿Podrías repetirlo?"
 
+        # 🔹 Paso 3: Selección de cantidad
         elif intent == "seleccionar_cantidad":
             cantidad_deseada = extraer_numero(user_message)
-            
+            logger.info(f"📏 Cantidad solicitada: {cantidad_deseada}")
+
             if cantidad_deseada <= 0:
-                 return "Por favor, ingresa una cantidad válida (mayor que cero)."
+                return "Por favor, ingresa una cantidad válida (mayor que cero)."
             
-            # 💡 Recuperación de Estado: Obtener el último producto añadido
             detalle = get_last_product_detail(pedido_id)
-            
+            logger.debug(f"🧾 Último detalle obtenido: {detalle}")
+
             if not detalle:
-                # El usuario saltó el paso o el pedido está vacío.
                 update_order_status(pedido_id, "BROWSING")
                 return "Parece que no has seleccionado ningún producto aún. ¿Cuál deseas agregar?"
             
             ultimo_producto_id = detalle['producto_id']
             ultimo_precio = detalle['precio_unitario']
-            cantidad_actual = detalle['cantidad'] # ⬅️ Obtenemos la cantidad actual (probablemente 1)
-            
-            # 💡 Lógica de Corrección: Calcular la diferencia necesaria
-            # Si actual es 1 y desea 5, la diferencia es 4. Si desea 0, la diferencia es -1.
+            cantidad_actual = detalle['cantidad']
+
             cantidad_a_añadir = cantidad_deseada - cantidad_actual
-            
+            logger.debug(f"🔄 Ajustando cantidad: actual={cantidad_actual}, deseada={cantidad_deseada}, delta={cantidad_a_añadir}")
+
             try:
-                # 💥 Actualizamos el detalle sumando la diferencia (delta).
                 add_or_update_order_detail(
                     pedido_id, 
                     producto_id=ultimo_producto_id, 
                     cantidad=cantidad_a_añadir, 
                     precio_unitario=ultimo_precio
                 )
-                
                 update_order_status(pedido_id, "AWAITING_CONFIRMATION")
                 return f"Perfecto, has ajustado el pedido a {cantidad_deseada} unidades. ¿Deseas ver el resumen antes de confirmar?"
-            
+
             except ValueError as e:
+                logger.error(f"❌ Error al actualizar cantidad: {e}")
                 return f"Ocurrió un error al actualizar la cantidad: {str(e)}"
 
+        # 🔹 Paso 4: Confirmación del pedido
         elif intent == "confirmar_pedido":
             update_order_status(pedido_id, "COMPLETED")
             detalles = get_order_summary(pedido_id)
+            logger.info(f"✅ Pedido {pedido_id} confirmado con detalles: {detalles}")
             return generar_resumen(detalles) + "\n\n✅ ¡Tu pedido ha sido confirmado! 🚚"
 
         else:
+            logger.info("ℹ️ Intención desconocida en flujo de pedido.")
             return "Puedo ayudarte con tu pedido ☕. ¿Deseas comenzar?"
             
     except Exception as e:
-        # 🚨 Captura errores graves (ej. fallo de conexión a BD o transacción)
-        logger.error(f"💥 Error grave en el flujo de pedido para user {user_id}: {e}")
-        # Intenta limpiar el pedido si falló y existe
+        logger.exception(f"💥 Error grave en el flujo de pedido para user {user_id}: {e}")
         if pedido_id:
-             try:
-                 delete_order(pedido_id) 
-             except Exception as cleanup_e:
-                 logger.error(f"Error al limpiar pedido {pedido_id}: {cleanup_e}") 
+            try:
+                delete_order(pedido_id)
+                logger.info(f"🧹 Pedido {pedido_id} eliminado tras error.")
+            except Exception as cleanup_e:
+                logger.error(f"Error al limpiar pedido {pedido_id}: {cleanup_e}") 
         return "Lo siento, ha ocurrido un error interno al procesar tu pedido. Por favor, intenta de nuevo más tarde."
 
 # ======================================================
@@ -481,10 +493,16 @@ async def get_agent_response(
 
         # 🔍 Detectar intención
         intent = detect_intent(user_message)
+        logger.info(f"🎯 Intención detectada: {intent}")
+
 
             # 🛒 Manejar flujo de pedido
         if intent in ["hacer_pedido", "seleccionar_producto", "seleccionar_cantidad", "confirmar_pedido"]:
+            logger.info(f"🧾 Iniciando flujo de pedido con mensaje: {user_message}")
+            logger.info(f"📦 Usuario: {user_id} | Intención: {intent}")    
+            
             order_response = handle_order_flow(user_id, intent, user_message)
+            logger.info(f"✅ Respuesta de flujo de pedido: {order_response}")
             await add_chat_turn(user_id, order_response, "assistant")
             return order_response
 
