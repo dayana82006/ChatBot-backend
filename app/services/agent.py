@@ -188,6 +188,12 @@ def detect_intent(text: str) -> str:
         return "seleccionar_producto"
     if any(k in text for k in ["unidad", "bolsa", "quiero", "libras", "cantidad"]):
         return "seleccionar_cantidad"
+    # Nuevo: detectar intención de agregar otro producto
+    if any(k in text for k in ["otro", "agregar otro", "seguir", "seguir comprando", "añadir otro"]):
+        return "agregar_otro"
+    # Nuevo: detectar intención de ir al pago
+    if any(k in text for k in ["pagar", "ir al pago", "finalizar", "checkout", "ir a pagar"]):
+        return "ir_al_pago"
     return "general"
 
 def extraer_numero(user_message: str) -> int:
@@ -403,12 +409,27 @@ def handle_order_flow(user_id: str, intent: str, user_message: str) -> str:
                     cantidad=cantidad_a_añadir, 
                     precio_unitario=ultimo_precio
                 )
-                update_order_status(pedido_id, "AWAITING_CONFIRMATION")
-                return f"Perfecto, has ajustado el pedido a {cantidad_deseada} unidades. ¿Deseas ver el resumen antes de confirmar?"
+                # Después de ajustar la cantidad, preguntar si desea agregar otro producto o ir al pago
+                update_order_status(pedido_id, "AWAITING_AFTER_QUANTITY")
+                return (
+                    f"Perfecto, has ajustado el pedido a {cantidad_deseada} unidades. "
+                    "¿Quieres agregar otro producto o prefieres proceder al pago?"
+                )
 
             except ValueError as e:
                 logger.error(f"❌ Error al actualizar cantidad: {e}")
                 return f"Ocurrió un error al actualizar la cantidad: {str(e)}"
+
+        # Nuevo: el usuario quiere agregar otro producto
+        elif intent == "agregar_otro":
+            update_order_status(pedido_id, "BROWSING")
+            return "Perfecto, dime qué otro producto te interesa."
+
+        # Nuevo: el usuario quiere ir al pago
+        elif intent == "ir_al_pago":
+            update_order_status(pedido_id, "AWAITING_PAYMENT")
+            detalles = get_order_summary(pedido_id)
+            return generar_resumen(detalles) + "\n\n¿Cuál método de pago prefieres? PSE, Nequi, Daviplata, Tarjeta o Efectivo?"
 
         # 🔹 Paso 4: Confirmación del pedido
         elif intent == "confirmar_pedido":
