@@ -234,3 +234,19 @@ def get_order_summary(pedido_id: int):
     finally:
         cursor.close()
         conn.close()
+
+
+def get_order_state(pedido_id: int):
+    """Retorna el estado actual del pedido."""
+    conn = get_connection()
+    cursor = conn.cursor(dictionary=True)
+    try:
+        cursor.execute("SELECT estado FROM pedidos WHERE id = %s", (pedido_id,))
+        row = cursor.fetchone()
+        return row['estado'] if row and 'estado' in row else None
+    except Exception as e:
+        logger.error(f"Error al obtener estado del pedido {pedido_id}: {e}")
+        return None
+    finally:
+        cursor.close()
+        conn.close()

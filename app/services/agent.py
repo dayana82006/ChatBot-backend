@@ -17,7 +17,8 @@ from app.queries.orderService import (
     update_order_status,
     get_order_summary,
     get_last_product_detail, # ⬅️ CLAVE para recuperar el producto
-    delete_order              # ⬅️ Para la limpieza en caso de error grave
+    delete_order,             # ⬅️ Para la limpieza en caso de error grave
+    get_order_state
 )
 import re
 
@@ -194,6 +195,12 @@ def detect_intent(text: str) -> str:
     # Nuevo: detectar intención de ir al pago
     if any(k in text for k in ["pagar", "ir al pago", "finalizar", "checkout", "ir a pagar"]):
         return "ir_al_pago"
+    # Detectar método de pago
+    if any(k in text for k in ["nequi", "pse", "daviplata", "tarjeta", "efectivo", "transferencia"]):
+        return "payment_method"
+    # Detectar datos de envío (palabras comunes o teléfono)
+    if any(k in text for k in ["direcci", "cra", "calle", "cll", "direccion", "ciudad", "telefono", "tel", "cel", "#"]):
+        return "shipping_info"
     return "general"
 
 def extraer_numero(user_message: str) -> int:
@@ -514,9 +521,8 @@ async def get_agent_response(
         intent = detect_intent(user_message)
         logger.info(f"🎯 Intención detectada: {intent}")
 
-
-            # 🛒 Manejar flujo de pedido
-        if intent in ["hacer_pedido", "seleccionar_producto", "seleccionar_cantidad", "confirmar_pedido"]:
+        # 🛒 Manejar flujo de pedido
+        if intent in ["hacer_pedido", "seleccionar_producto", "seleccionar_cantidad", "confirmar_pedido", "agregar_otro", "ir_al_pago", "payment_method", "shipping_info"]:
             logger.info(f"🧾 Iniciando flujo de pedido con mensaje: {user_message}")
             logger.info(f"📦 Usuario: {user_id} | Intención: {intent}")    
             
