@@ -121,6 +121,7 @@ VALUES
  12000,
  'COP',
  50,
+
  '{"title": "Cold Brew", "tags": ["cold-brew","frio","listo","natural"], "precio_min":12000, "precio_max":30000}'
 );
 

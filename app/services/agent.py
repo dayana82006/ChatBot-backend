@@ -10,7 +10,7 @@ from app.services.redisServices import (
     push_message_queue, pop_message_queue,
     clear_user_session, clear_chat_context
 )
-from database.database import get_connection
+from app.database import get_connection
 from app.queries.orderService import (
     get_or_create_pending_order,
     add_or_update_order_detail,
@@ -349,10 +349,8 @@ def handle_order_flow(user_id: str, intent: str, user_message: str) -> str:
         elif intent == "seleccionar_producto":
             logger.info("🔍 Detectando producto desde el mensaje del usuario...")
             
-            # ✅ Aquí abrimos conexión a MySQL solo para buscar el producto
-            connection = get_connection()
-            producto = obtener_producto_desde_texto(user_message, connection)
-            connection.close()
+            # Detectar producto desde el mensaje (no requiere conexión DB porque usamos mapeo en memoria)
+            producto = obtener_producto_desde_texto(user_message)
 
             logger.debug(f"🧩 Resultado obtener_producto_desde_texto: {producto}")
 

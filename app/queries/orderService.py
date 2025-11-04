@@ -46,6 +46,32 @@ def get_last_product_detail(pedido_id: int):
         conn.close()
 
 # =====================================================
+# 🔹 Recalcular total del pedido (helper)
+# =====================================================
+def recalculate_order_total(pedido_id: int, conn, cursor):
+    """
+    Recalcula el total del pedido usando los detalles y actualiza la tabla pedidos.
+    Usa la conexión y cursor proporcionados (para mantener atomicidad).
+    """
+    try:
+        cursor.execute("""
+            SELECT COALESCE(SUM(cantidad * precio_unitario), 0) AS total
+            FROM pedido_detalles
+            WHERE pedido_id = %s
+        """, (pedido_id,))
+        row = cursor.fetchone()
+        total = row['total'] if isinstance(row, dict) else (row[0] if row else 0)
+        cursor.execute("""
+            UPDATE pedidos
+            SET total = %s, actualizado_en = %s
+            WHERE id = %s
+        """, (total, datetime.now(), pedido_id))
+        logger.info(f"Total recalculado para pedido {pedido_id}: {total}")
+    except Exception as e:
+        logger.error(f"Error al recalcular total para pedido {pedido_id}: {e}")
+        raise
+
+# =====================================================
 # 🔹 Obtener o crear pedido pendiente para un usuario
 # =====================================================
 def get_or_create_pending_order(user_id: str):
@@ -138,6 +164,8 @@ def add_or_update_order_detail(pedido_id: int, producto_id, cantidad: int, preci
             
             inserted_id = cursor.lastrowid
             logger.info(f"Nuevo detalle insertado: ID={inserted_id}")
+        # Recalcular y actualizar total del pedido (misma conexión para atomicidad)
+        recalculate_order_total(pedido_id, conn, cursor)
 
         # Confirmar cambios
         conn.commit()
